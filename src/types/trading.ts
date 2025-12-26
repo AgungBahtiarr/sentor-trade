@@ -32,7 +32,7 @@ export interface MarketData {
 }
 
 export interface TradingSignal {
-  signal: 'BUY' | 'SELL' | 'HOLD';
+  signal: 'BUY' | 'SELL' | 'NO_SIGNAL';
   confidence: number;
   reasoning: string;
 }

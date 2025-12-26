@@ -62,6 +62,23 @@ export class BinanceService {
     }
   }
 
+  async getMultiTimeframeData(
+    symbol: string = CONFIG.binance.defaultSymbol,
+    timeframes: string[] = ['1h', '4h']
+  ): Promise<Record<string, CandleData[]>> {
+    try {
+      const promises = timeframes.map(tf => this.fetchCandles(symbol, tf));
+      const results = await Promise.all(promises);
+
+      return timeframes.reduce((acc, tf, index) => {
+        acc[tf] = results[index];
+        return acc;
+      }, {} as Record<string, CandleData[]>);
+    } catch (error) {
+      throw new Error(`Failed to get multi-timeframe data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   async getCurrentPrice(symbol: string = CONFIG.binance.defaultSymbol): Promise<number> {
     try {
       const ticker = await this.exchange.fetchTicker(symbol);

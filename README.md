@@ -8,7 +8,8 @@ AI-powered futures trading analysis platform that fetches real-time market data 
 - **Technical Indicators**: Calculate RSI, MACD, and EMA indicators
 - **AI-Powered Analysis**: Get trading signals, trend analysis, and support/resistance levels from DeepSeek
 - **Support & Resistance**: Automatically identify key price levels
-- **Trading Signals**: Buy/Sell/Hold recommendations with confidence levels
+- **Conservative Trading Signals**: Buy/Sell recommendations only when confidence is 70%+, otherwise returns NO_SIGNAL
+- **High-Quality Signals**: Multiple indicator confluence required before generating a trading signal
 
 ## Installation
 
@@ -55,9 +56,10 @@ GET /api/trading/analyze?symbol=BTCUSDT&timeframe=15m
 Response includes:
 - Market data (current price, price change, candles)
 - Technical indicators (RSI, MACD, EMA)
-- AI-powered trading signal (BUY/SELL/HOLD)
+- AI-powered trading signal (BUY/SELL/NO_SIGNAL)
 - Trend analysis
 - Support and resistance levels
+- Risk considerations and market summary
 
 ### Technical Indicators Only
 ```
@@ -120,12 +122,32 @@ src/
     └── config.ts         # Configuration and constants
 ```
 
+## Trading Signal Logic
+
+The platform uses a conservative approach to signal generation:
+
+- **BUY or SELL signals** are only generated when:
+  * Multiple technical indicators align in the same direction
+  * Confidence level is 70% or higher
+  * Clear confluence exists between RSI, EMA, and MACD
+
+- **NO_SIGNAL** is returned when:
+  * Indicators are mixed or conflicting
+  * Market is showing no clear direction
+  * Confidence level is below 70%
+  * Risk-reward ratio is unfavorable
+  * Market conditions are too uncertain
+
+This conservative approach ensures that only high-quality trading opportunities are presented, reducing the risk of false signals.
+
 ## Important Notes
 
 - This is a trading analysis tool, not financial advice
 - Always do your own research and risk management
 - The AI-powered signals are based on technical analysis only
 - Past performance does not guarantee future results
+- Signals are conservative - NO_SIGNAL is preferred over low-confidence signals
+- Always use proper risk management (stop-loss, position sizing) when trading
 
 ## License
 

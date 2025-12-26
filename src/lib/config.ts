@@ -1,8 +1,8 @@
 export const CONFIG = {
   binance: {
-    apiUrl: 'https://fapi.binance.com',
-    defaultSymbol: 'BTCUSDT',
-    defaultTimeframe: '15m',
+    apiUrl: "https://fapi.binance.com",
+    defaultSymbol: "BTCUSDT",
+    defaultTimeframe: "15m",
     candleLimit: 100,
   },
   indicators: {
@@ -23,13 +23,14 @@ export const CONFIG = {
     },
   },
   ai: {
-    model: 'deepseek/deepseek-chat',
+    model: "nex-agi/deepseek-v3.1-nex-n1:free",
     temperature: 0.7,
     maxTokens: 1000,
+    minConfidenceForSignal: 70,
   },
 };
 
-export const getEnvVar = (name: string, defaultValue: string = ''): string => {
+export const getEnvVar = (name: string, defaultValue: string = ""): string => {
   const value = process.env[name];
   return value || defaultValue;
 };
