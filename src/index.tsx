@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import tradingRouter from "./routes/trading";
+import uiRouter from "./routes/ui";
 
 const app = new Hono();
 
-app.get("/", (c) => {
+app.get("/api", (c) => {
   return c.json({
     name: "Sentor Trade API",
     version: "2.0.0",
@@ -51,6 +52,7 @@ app.get("/", (c) => {
 });
 
 app.route("/api/trading", tradingRouter);
+app.route("/", uiRouter);
 
 Bun.serve({
   fetch: app.fetch,
