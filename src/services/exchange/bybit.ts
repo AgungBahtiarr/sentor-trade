@@ -1,8 +1,9 @@
 import ccxt from "ccxt";
-import { CONFIG } from "../lib/config";
-import type { CandleData, MarketData } from "../types/trading";
+import { CONFIG } from "../../lib/config";
+import type { IExchange } from "./exchange-interface";
+import type { CandleData, MarketData } from "../../types/trading";
 
-export class BinanceService {
+export class BybitExchange implements IExchange {
   private exchange: ccxt.bybit;
 
   constructor() {
@@ -18,15 +19,15 @@ export class BinanceService {
   }
 
   async fetchCandles(
-    symbol: string = CONFIG.bybit.defaultSymbol,
-    timeframe: string = CONFIG.bybit.defaultTimeframe,
+    symbol: string = CONFIG.exchange.defaultSymbol,
+    timeframe: string = CONFIG.exchange.defaultTimeframe,
   ): Promise<CandleData[]> {
     try {
       const ohlcv = await this.exchange.fetchOHLCV(
         symbol,
         timeframe,
         undefined,
-        CONFIG.bybit.candleLimit,
+        CONFIG.exchange.candleLimit,
       );
 
       if (!ohlcv || !Array.isArray(ohlcv)) {
@@ -50,8 +51,8 @@ export class BinanceService {
   }
 
   async getMarketData(
-    symbol: string = CONFIG.bybit.defaultSymbol,
-    timeframe: string = CONFIG.bybit.defaultTimeframe,
+    symbol: string = CONFIG.exchange.defaultSymbol,
+    timeframe: string = CONFIG.exchange.defaultTimeframe,
   ): Promise<MarketData> {
     try {
       const [candles, ticker] = await Promise.all([
@@ -78,7 +79,7 @@ export class BinanceService {
   }
 
   async getMultiTimeframeData(
-    symbol: string = CONFIG.bybit.defaultSymbol,
+    symbol: string = CONFIG.exchange.defaultSymbol,
     timeframes: string[] = ["1h", "4h"],
   ): Promise<Record<string, CandleData[]>> {
     try {
@@ -100,7 +101,7 @@ export class BinanceService {
   }
 
   async getCurrentPrice(
-    symbol: string = CONFIG.bybit.defaultSymbol,
+    symbol: string = CONFIG.exchange.defaultSymbol,
   ): Promise<number> {
     try {
       const ticker = await this.exchange.fetchTicker(symbol);
@@ -112,5 +113,3 @@ export class BinanceService {
     }
   }
 }
-
-export const binanceService = new BinanceService();

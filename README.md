@@ -1,10 +1,10 @@
 # Sentor Trade
 
-AI-powered futures trading analysis platform that fetches real-time market data from Binance, calculates technical indicators (RSI, MACD, EMA), and provides intelligent trading signals using DeepSeek AI.
+AI-powered futures trading analysis platform that fetches real-time market data from Bybit, calculates technical indicators (RSI, MACD, EMA), and provides intelligent trading signals using DeepSeek AI.
 
 ## Features
 
-- **Real-time Market Data**: Fetch candle data from Binance Futures API (public data, no API key required)
+- **Real-time Market Data**: Fetch candle data from Bybit Futures API (public data, no API key required)
 - **Technical Indicators**: Calculate RSI, MACD, and EMA indicators
 - **AI-Powered Analysis**: Get trading signals, trend analysis, and support/resistance levels from DeepSeek
 - **Support & Resistance**: Automatically identify key price levels
@@ -81,7 +81,7 @@ Response includes current price for the specified symbol.
 
 ## Supported Symbols
 
-Any Binance Futures trading pair (e.g., BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT)
+Any Bybit Futures trading pair (e.g., BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT)
 
 ## Example Usage
 
@@ -101,7 +101,7 @@ curl "http://localhost:3000/api/trading/price?symbol=SOLUSDT"
 - **Runtime**: Bun
 - **Framework**: Hono v4
 - **Language**: TypeScript
-- **Data Provider**: CCXT (Binance)
+- **Data Provider**: CCXT (Bybit) - with exchange abstraction layer
 - **Indicators**: TechnicalIndicators library
 - **AI**: Vercel AI SDK + OpenRouter (DeepSeek)
 
@@ -113,7 +113,10 @@ src/
 ├── routes/
 │   └── trading.ts        # API route handlers
 ├── services/
-│   ├── binance.ts        # Binance data fetching
+│   ├── exchange/         # Exchange abstraction layer
+│   │   ├── exchange-interface.ts  # Exchange interface definition
+│   │   ├── bybit.ts               # Bybit implementation
+│   │   └── exchange-provider.ts   # Exchange factory
 │   ├── indicators.ts     # Technical indicator calculations
 │   └── ai-analyzer.ts    # AI analysis with DeepSeek
 ├── types/
@@ -121,6 +124,24 @@ src/
 └── lib/
     └── config.ts         # Configuration and constants
 ```
+
+## Switching Exchanges
+
+To switch between exchanges, update the `src/lib/config.ts` file:
+
+```typescript
+exchange: {
+  provider: "bybit",  // Change to "binance", "okx", etc. when implemented
+  defaultSymbol: "BTCUSDT",
+  defaultTimeframe: "15m",
+  candleLimit: 100,
+}
+```
+
+To add a new exchange:
+1. Create a new class implementing `IExchange` in `src/services/exchange/`
+2. Add the exchange name to the `ExchangeProvider.createExchange()` method
+3. Update the config to use the new exchange provider
 
 ## Trading Signal Logic
 

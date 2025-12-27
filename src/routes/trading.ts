@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { binanceService } from '../services/binance';
+import { exchangeService } from '../services/exchange/exchange-provider';
 import { indicatorsService } from '../services/indicators';
 import { aiAnalyzerService } from '../services/ai-analyzer';
 import { ictService } from '../services/ict/ict-service';
@@ -18,7 +18,7 @@ tradingRouter.get('/analyze', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
 
-    const marketData = await binanceService.getMarketData(symbol, timeframe);
+    const marketData = await exchangeService.getMarketData(symbol, timeframe);
     const indicators = indicatorsService.calculateAllIndicators(marketData.candles);
     const supportResistance = indicatorsService.analyzeSupportResistance(marketData.candles);
     
@@ -62,7 +62,7 @@ tradingRouter.get('/indicators', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
 
-    const marketData = await binanceService.getMarketData(symbol, timeframe);
+    const marketData = await exchangeService.getMarketData(symbol, timeframe);
     const indicators = indicatorsService.calculateAllIndicators(marketData.candles);
     const supportResistance = indicatorsService.analyzeSupportResistance(marketData.candles);
 
@@ -92,7 +92,7 @@ tradingRouter.get('/indicators', async (c) => {
 tradingRouter.get('/price', async (c) => {
   try {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
-    const price = await binanceService.getCurrentPrice(symbol);
+    const price = await exchangeService.getCurrentPrice(symbol);
 
     return c.json({
       success: true,
@@ -181,7 +181,7 @@ tradingRouter.get('/ict/fvg', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
 
-    const candles = await binanceService.fetchCandles(symbol, timeframe);
+    const candles = await exchangeService.fetchCandles(symbol, timeframe);
     const fvgs = fvgService.detectFairValueGaps(candles);
     const activeFVGs = fvgService.getActiveFVGs(fvgs);
 
@@ -212,7 +212,7 @@ tradingRouter.get('/ict/orderblocks', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
 
-    const candles = await binanceService.fetchCandles(symbol, timeframe);
+    const candles = await exchangeService.fetchCandles(symbol, timeframe);
     const orderBlocks = orderBlockService.detectOrderBlocks(candles);
     const activeOBs = orderBlockService.getActiveOrderBlocks(orderBlocks);
 
@@ -243,7 +243,7 @@ tradingRouter.get('/ict/liquidity', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
 
-    const candles = await binanceService.fetchCandles(symbol, timeframe);
+    const candles = await exchangeService.fetchCandles(symbol, timeframe);
     const liquidity = liquidityService.analyzeLiquidity(candles);
 
     return c.json({
@@ -271,7 +271,7 @@ tradingRouter.get('/ict/structure', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
 
-    const candles = await binanceService.fetchCandles(symbol, timeframe);
+    const candles = await exchangeService.fetchCandles(symbol, timeframe);
     const structure = marketStructureService.analyzeMarketStructure(candles);
 
     return c.json({

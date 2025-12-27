@@ -1,6 +1,6 @@
 export const CONFIG = {
-  bybit: {
-    apiUrl: "https://api.bybit.com",
+  exchange: {
+    provider: "bybit",
     defaultSymbol: "BTCUSDT",
     defaultTimeframe: "15m",
     candleLimit: 100,

@@ -1,4 +1,4 @@
-import { binanceService } from '../binance';
+import { exchangeService } from '../exchange/exchange-provider';
 import { fvgService } from './fvg';
 import { orderBlockService } from './order-block';
 import { liquidityService } from './liquidity';
@@ -17,8 +17,8 @@ export class ICTService {
     ictAnalysis: ICTAnalysis;
   }> {
     const [primaryCandles, higherCandles] = await Promise.all([
-      binanceService.fetchCandles(symbol, primaryTimeframe),
-      binanceService.fetchCandles(symbol, higherTimeframe),
+      exchangeService.fetchCandles(symbol, primaryTimeframe),
+      exchangeService.fetchCandles(symbol, higherTimeframe),
     ]);
 
     const primaryAnalysis = this.analyzeTimeframe(primaryCandles);

@@ -4,7 +4,7 @@ This file provides guidelines for agentic coding assistants working in this repo
 
 ## Project Overview
 
-Sentor Trade is a futures trading analysis platform built with Bun, Hono, and TypeScript. The system fetches real-time candle data from Binance via CCXT, calculates technical indicators (RSI, MACD, EMA) using the TechnicalIndicators library, and sends processed data to OpenRouter (DeepSeek model) for AI-powered analysis using the Vercel AI SDK.
+Sentor Trade is a futures trading analysis platform built with Bun, Hono, and TypeScript. The system fetches real-time candle data from Bybit via CCXT (with exchange abstraction layer), calculates technical indicators (RSI, MACD, EMA) using the TechnicalIndicators library, and sends processed data to OpenRouter (DeepSeek model) for AI-powered analysis using the Vercel AI SDK.
 
 ## Tech Stack
 
@@ -58,9 +58,9 @@ bun run dev
 
 - **Files**: kebab-case (`trading-analyzer.ts`, `api-routes.ts`)
 - **Variables/Functions**: camelCase (`calculateRSI`, `candleData`)
-- **Constants**: UPPER_SNAKE_CASE (`BINANCE_API_URL`, `DEFAULT_SYMBOL`)
-- **Classes/Types**: PascalCase (`CandleData`, `IndicatorResult`)
-- **Interfaces**: PascalCase with 'I' prefix only if needed for clarity (`IMarketData`)
+- **Constants**: UPPER_SNAKE_CASE (`EXCHANGE_PROVIDER`, `DEFAULT_SYMBOL`)
+- **Classes/Types**: PascalCase (`CandleData`, `IndicatorResult`, `BybitExchange`)
+- **Interfaces**: PascalCase with 'I' prefix for interfaces (`IExchange`)
 
 ### Error Handling
 
@@ -97,9 +97,25 @@ src/
   index.ts           # Entry point
   routes/            # API route handlers
   services/          # Business logic
+    exchange/        # Exchange abstraction layer
   lib/               # Utility functions
   types/             # TypeScript type definitions
 ```
+
+### Exchange Abstraction Layer
+
+The project uses an exchange abstraction pattern to easily switch between different cryptocurrency exchanges:
+
+- **Interface**: `IExchange` in `src/services/exchange/exchange-interface.ts` defines common methods
+- **Implementations**: Each exchange implements `IExchange` (e.g., `BybitExchange`)
+- **Provider**: `ExchangeProvider` in `src/services/exchange/exchange-provider.ts` creates the appropriate exchange instance based on config
+- **Configuration**: Exchange provider is set in `src/lib/config.ts` under `exchange.provider`
+
+When adding a new exchange:
+1. Create a new class implementing `IExchange` in `src/services/exchange/[exchange-name].ts`
+2. Add the exchange case to `ExchangeProvider.createExchange()` method
+3. Update `CONFIG.exchange.provider` in `config.ts` to use the new exchange
+4. Ensure all methods from `IExchange` are properly implemented
 
 ### Security
 
