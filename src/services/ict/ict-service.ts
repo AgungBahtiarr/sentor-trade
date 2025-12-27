@@ -51,7 +51,7 @@ export class ICTService {
       timeAnalysisService.analyzeTime(),
     ];
 
-    const confluence = this.calculateConfluence(fvgs, orderBlocks, liquidity, marketStructure);
+    const confluence = this.calculateConfluence(fvgs, orderBlocks, liquidity, marketStructure, timeAnalysis);
 
     return {
       fairValueGaps: fvgs,
@@ -85,7 +85,8 @@ export class ICTService {
       combinedFVGs,
       combinedOBs,
       combinedLiquidity,
-      combinedStructure
+      combinedStructure,
+      primary.timeAnalysis
     );
 
     return {
@@ -102,7 +103,8 @@ export class ICTService {
     fvgs: any[],
     orderBlocks: any[],
     liquidity: any,
-    marketStructure: any
+    marketStructure: any,
+    timeAnalysis: any
   ): {
     bullishScore: number;
     bearishScore: number;
@@ -178,8 +180,8 @@ export class ICTService {
       secondaryConfirmations.push('Bearish Change of Character');
     }
 
-    if (marketStructure.timeAnalysis.killZone.active) {
-      secondaryConfirmations.push(`Active ${marketStructure.timeAnalysis.killZone.name} Kill Zone`);
+    if (timeAnalysis.killZone.active) {
+      secondaryConfirmations.push(`Active ${timeAnalysis.killZone.name} Kill Zone`);
     }
 
     return {

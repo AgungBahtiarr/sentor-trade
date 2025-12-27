@@ -121,7 +121,7 @@ tradingRouter.get('/ict/analyze', async (c) => {
 
     const ictResult = await ictService.analyzeICT(symbol, primaryTimeframe, higherTimeframe);
     
-    const marketData = await binanceService.getMarketData(symbol, primaryTimeframe);
+    const marketData = await exchangeService.getMarketData(symbol, primaryTimeframe);
     const indicators = indicatorsService.calculateAllIndicators(marketData.candles);
     const supportResistance = indicatorsService.analyzeSupportResistance(marketData.candles);
 

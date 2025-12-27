@@ -1,5 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 import { CONFIG, getEnvVar } from "../lib/config";
 import type {
@@ -139,6 +139,8 @@ export class AIAnalyzerService {
     `;
   }
 
+
+
   // --- METHOD 1: ANALISA STANDAR ---
   async analyzeMarket(
     marketData: MarketData,
@@ -155,10 +157,10 @@ export class AIAnalyzerService {
     marketSummary: string;
   }> {
     try {
-      // Panggil AI dengan generateObject + structured output
-      const { object } = await generateObject({
+      // Panggil AI dengan generateText + structured output
+      const { output } = await generateText({
         model: this.getModel(),
-        schema: StandardAnalysisSchema,
+        output: Output.object({ schema: StandardAnalysisSchema }),
         system: `You are an expert Crypto Futures Trader.
                  Analyze the provided data.
                  Prioritize Trend Following.
@@ -166,6 +168,8 @@ export class AIAnalyzerService {
                  Otherwise signal NO_SIGNAL.`,
         prompt: `Analyze this market data:\n${this.buildMarketContext(marketData, indicators)}`,
       });
+
+      const object = output;
 
       // Validasi Confidence (Risk Management Layer)
       const minConfidence = CONFIG.ai.minConfidenceForSignal;
@@ -230,9 +234,9 @@ export class AIAnalyzerService {
       const marketCtx = this.buildMarketContext(marketData, indicators);
       const ictCtx = this.buildICTContext(ictAnalysis);
 
-      const { object } = await generateObject({
+      const { output } = await generateText({
         model: this.getModel(),
-        schema: ICTAnalysisSchema,
+        output: Output.object({ schema: ICTAnalysisSchema }),
         system: `You are an ICT (Inner Circle Trader) Specialist.
                  Weight ICT concepts (FVG, Order Blocks, Liquidity) as 80% of your decision.
                  Use Traditional indicators only as secondary confirmation.
@@ -243,6 +247,8 @@ export class AIAnalyzerService {
                  3. If structure is unclear or outside Kill Zones, signal NO_SIGNAL.`,
         prompt: `Analyze this market setup:\n${marketCtx}\n\n${ictCtx}`,
       });
+
+      const object = output;
 
       // Validasi Confidence
       const minConfidence = CONFIG.ai.minConfidenceForSignal;
