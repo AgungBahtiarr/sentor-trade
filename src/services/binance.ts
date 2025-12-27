@@ -3,30 +3,30 @@ import { CONFIG } from "../lib/config";
 import type { CandleData, MarketData } from "../types/trading";
 
 export class BinanceService {
-  private exchange: ccxt.binance;
+  private exchange: ccxt.bybit;
 
   constructor() {
-    this.exchange = new ccxt.binance({
+    this.exchange = new ccxt.bybit({
       apiKey: undefined,
       secret: undefined,
       enableRateLimit: true,
       timeout: 10000,
       options: {
-        defaultType: "future",
+        defaultType: "linear",
       },
     });
   }
 
   async fetchCandles(
-    symbol: string = CONFIG.binance.defaultSymbol,
-    timeframe: string = CONFIG.binance.defaultTimeframe,
+    symbol: string = CONFIG.bybit.defaultSymbol,
+    timeframe: string = CONFIG.bybit.defaultTimeframe,
   ): Promise<CandleData[]> {
     try {
       const ohlcv = await this.exchange.fetchOHLCV(
         symbol,
         timeframe,
         undefined,
-        CONFIG.binance.candleLimit,
+        CONFIG.bybit.candleLimit,
       );
 
       if (!ohlcv || !Array.isArray(ohlcv)) {
@@ -44,14 +44,14 @@ export class BinanceService {
     } catch (error) {
       console.error(`Error fetching candles for ${symbol}:`, error);
       throw new Error(
-        `Failed to fetch candles from Binance: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to fetch candles from Bybit: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     }
   }
 
   async getMarketData(
-    symbol: string = CONFIG.binance.defaultSymbol,
-    timeframe: string = CONFIG.binance.defaultTimeframe,
+    symbol: string = CONFIG.bybit.defaultSymbol,
+    timeframe: string = CONFIG.bybit.defaultTimeframe,
   ): Promise<MarketData> {
     try {
       const [candles, ticker] = await Promise.all([
@@ -78,7 +78,7 @@ export class BinanceService {
   }
 
   async getMultiTimeframeData(
-    symbol: string = CONFIG.binance.defaultSymbol,
+    symbol: string = CONFIG.bybit.defaultSymbol,
     timeframes: string[] = ["1h", "4h"],
   ): Promise<Record<string, CandleData[]>> {
     try {
@@ -100,7 +100,7 @@ export class BinanceService {
   }
 
   async getCurrentPrice(
-    symbol: string = CONFIG.binance.defaultSymbol,
+    symbol: string = CONFIG.bybit.defaultSymbol,
   ): Promise<number> {
     try {
       const ticker = await this.exchange.fetchTicker(symbol);

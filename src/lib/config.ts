@@ -1,6 +1,6 @@
 export const CONFIG = {
-  binance: {
-    apiUrl: "https://fapi.binance.com",
+  bybit: {
+    apiUrl: "https://api.bybit.com",
     defaultSymbol: "BTCUSDT",
     defaultTimeframe: "15m",
     candleLimit: 100,
