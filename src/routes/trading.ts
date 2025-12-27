@@ -332,4 +332,40 @@ tradingRouter.get('/health', (c) => {
   });
 });
 
+tradingRouter.post('/test-llm', async (c) => {
+  try {
+    const body = await c.req.json();
+    const prompt = body.prompt;
+
+    if (!prompt || typeof prompt !== 'string') {
+      return c.json(
+        {
+          success: false,
+          error: 'Prompt is required and must be a string',
+        },
+        400
+      );
+    }
+
+    const response = await aiAnalyzerService.testLLM(prompt);
+
+    return c.json({
+      success: true,
+      data: {
+        prompt,
+        response,
+        timestamp: Date.now(),
+      },
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to test LLM',
+      },
+      500
+    );
+  }
+});
+
 export default tradingRouter;

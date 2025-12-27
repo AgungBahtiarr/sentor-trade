@@ -1,5 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateObject } from "ai";
+import { generateText, generateObject } from "ai";
 import { z } from "zod";
 import { CONFIG, getEnvVar } from "../lib/config";
 import type {
@@ -155,7 +155,7 @@ export class AIAnalyzerService {
     marketSummary: string;
   }> {
     try {
-      // Panggil AI dengan generateObject + Zod
+      // Panggil AI dengan generateObject + structured output
       const { object } = await generateObject({
         model: this.getModel(),
         schema: StandardAnalysisSchema,
@@ -278,6 +278,21 @@ export class AIAnalyzerService {
     } catch (error) {
       throw new Error(
         `ICT AI analysis failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+  }
+
+  // --- METHOD 3: TEST LLM PROMPT ---
+  async testLLM(prompt: string): Promise<string> {
+    try {
+      const { text } = await generateText({
+        model: this.getModel(),
+        prompt,
+      });
+      return text;
+    } catch (error) {
+      throw new Error(
+        `LLM test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     }
   }
