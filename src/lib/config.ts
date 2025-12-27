@@ -31,6 +31,6 @@ export const CONFIG = {
 };
 
 export const getEnvVar = (name: string, defaultValue: string = ""): string => {
-  const value = process.env[name];
+  const value = Bun.env[name];
   return value || defaultValue;
 };

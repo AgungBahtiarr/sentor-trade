@@ -55,15 +55,28 @@ const ICTAnalysisSchema = z.object({
 // --- 2. SERVICE CLASS ---
 
 export class AIAnalyzerService {
-  private openRouter;
+  private openRouter: any = null;
+  private model: any = null;
 
-  constructor() {
-    const apiKey = getEnvVar("OPENROUTER_API_KEY");
-    if (apiKey) {
+  private getModel() {
+    if (!this.openRouter) {
+      const apiKey = getEnvVar("OPENROUTER_API_KEY");
+      if (!apiKey) {
+        throw new Error(
+          "OPENROUTER_API_KEY is not set in environment variables",
+        );
+      }
+
       this.openRouter = createOpenRouter({
         apiKey,
       });
     }
+
+    if (!this.model) {
+      this.model = this.openRouter(CONFIG.ai.model);
+    }
+
+    return this.model;
   }
 
   // Helper: Membuat string konteks data untuk prompt (Standard)
@@ -141,14 +154,11 @@ export class AIAnalyzerService {
     riskConsiderations: string;
     marketSummary: string;
   }> {
-    if (!this.openRouter) throw new Error("OpenRouter API key missing");
-
     try {
       // Panggil AI dengan generateObject + Zod
       const { object } = await generateObject({
-        model: this.openRouter.chat(CONFIG.ai.model),
-        schema: StandardAnalysisSchema, // <--- MAGIC: Validasi otomatis
-        temperature: CONFIG.ai.temperature,
+        model: this.getModel(),
+        schema: StandardAnalysisSchema,
         system: `You are an expert Crypto Futures Trader.
                  Analyze the provided data.
                  Prioritize Trend Following.
@@ -216,17 +226,13 @@ export class AIAnalyzerService {
       invalidations: string[];
     };
   }> {
-    if (!this.openRouter) throw new Error("OpenRouter API key missing");
-
     try {
       const marketCtx = this.buildMarketContext(marketData, indicators);
       const ictCtx = this.buildICTContext(ictAnalysis);
 
       const { object } = await generateObject({
-        model: this.openRouter.chat(CONFIG.ai.model),
-        schema: ICTAnalysisSchema, // <--- MAGIC: Validasi otomatis
-        temperature: CONFIG.ai.temperature,
-        maxTokens: 1500, // Cukup besar untuk analisis kompleks
+        model: this.getModel(),
+        schema: ICTAnalysisSchema,
         system: `You are an ICT (Inner Circle Trader) Specialist.
                  Weight ICT concepts (FVG, Order Blocks, Liquidity) as 80% of your decision.
                  Use Traditional indicators only as secondary confirmation.
