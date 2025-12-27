@@ -210,6 +210,11 @@ export class AIAnalyzerService {
     riskConsiderations: string;
     marketSummary: string;
     ictSpecific: string;
+    setup: {
+      primary: string;
+      confirmations: string[];
+      invalidations: string[];
+    };
   }> {
     if (!this.openRouter) throw new Error("OpenRouter API key missing");
 
@@ -262,6 +267,7 @@ export class AIAnalyzerService {
         riskConsiderations: object.riskConsiderations,
         marketSummary: object.marketSummary,
         ictSpecific: object.ictSpecific, // Data khusus ICT
+        setup: object.setup, // Setup ICT
       };
     } catch (error) {
       throw new Error(
