@@ -17,6 +17,7 @@ tradingRouter.get('/analyze', async (c) => {
   try {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const timeframe = c.req.query('timeframe') || '15m';
+    console.log('Backend received symbol:', symbol, 'timeframe:', timeframe);
 
     const marketData = await exchangeService.getMarketData(symbol, timeframe);
     const indicators = indicatorsService.calculateAllIndicators(marketData.candles);
@@ -41,10 +42,6 @@ tradingRouter.get('/analyze', async (c) => {
     return c.json({
       success: true,
       data: analysis,
-      analysis: {
-        ...aiAnalysis,
-        supportResistanceLevels: supportResistance,
-      },
     });
   } catch (error) {
     return c.json(
@@ -118,9 +115,13 @@ tradingRouter.get('/ict/analyze', async (c) => {
     const symbol = c.req.query('symbol') || 'BTCUSDT';
     const primaryTimeframe = c.req.query('timeframe') || '15m';
     const higherTimeframe = c.req.query('higherTimeframe') || '4h';
+    console.log('Backend ICT received symbol:', symbol, 'primaryTimeframe:', primaryTimeframe, 'higherTimeframe:', higherTimeframe);
 
     const ictResult = await ictService.analyzeICT(symbol, primaryTimeframe, higherTimeframe);
-    
+    if (!ictResult || !ictResult.ictAnalysis) {
+      throw new Error('Failed to perform ICT analysis');
+    }
+
     const marketData = await exchangeService.getMarketData(symbol, primaryTimeframe);
     const indicators = indicatorsService.calculateAllIndicators(marketData.candles);
     const supportResistance = indicatorsService.analyzeSupportResistance(marketData.candles);
@@ -152,18 +153,18 @@ tradingRouter.get('/ict/analyze', async (c) => {
       signal,
       ictAnalysis: ictResult.ictAnalysis,
       secondaryIndicators: indicators,
-      timestamp: Date.now(),
-    };
-
-    return c.json({
-      success: true,
-      data: ictAnalysis,
       marketData: {
         symbol: marketData.symbol,
         timeframe: primaryTimeframe,
         currentPrice: marketData.currentPrice,
         priceChangePercent: marketData.priceChangePercent,
       },
+      timestamp: Date.now(),
+    };
+
+    return c.json({
+      success: true,
+      data: ictAnalysis,
     });
   } catch (error) {
     return c.json(

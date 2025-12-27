@@ -29,7 +29,7 @@ export class HyperliquidExchange implements IExchange {
   ): Promise<CandleData[]> {
     try {
       const now = Date.now();
-      const startTime = now - (100 * 60 * 60 * 1000); // 100 hours ago for enough data
+      const startTime = now - 100 * 60 * 60 * 1000;
 
       const response = await fetch(this.baseUrl, {
         method: "POST",
@@ -57,14 +57,16 @@ export class HyperliquidExchange implements IExchange {
         return [];
       }
 
-      return data.map((candle) => ({
-        timestamp: candle.t,
-        open: parseFloat(candle.o),
-        high: parseFloat(candle.h),
-        low: parseFloat(candle.l),
-        close: parseFloat(candle.c),
-        volume: parseFloat(candle.v),
-      })).sort((a, b) => a.timestamp - b.timestamp);
+      return data
+        .map((candle) => ({
+          timestamp: candle.t,
+          open: parseFloat(candle.o),
+          high: parseFloat(candle.h),
+          low: parseFloat(candle.l),
+          close: parseFloat(candle.c),
+          volume: parseFloat(candle.v),
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
     } catch (error) {
       console.error(`Error fetching candles for ${symbol}:`, error);
       throw new Error(
@@ -83,14 +85,16 @@ export class HyperliquidExchange implements IExchange {
         this.getAllPrices(),
       ]);
 
-      const currentPrice = parseFloat(prices[this.toHyperliquidSymbol(symbol)] || "0");
+      const currentPrice = parseFloat(
+        prices[this.toHyperliquidSymbol(symbol)] || "0",
+      );
 
       return {
         symbol,
         timeframe,
         candles,
         currentPrice,
-        priceChange: 0, // Hyperliquid doesn't provide change in allMids
+        priceChange: 0,
         priceChangePercent: 0,
       };
     } catch (error) {

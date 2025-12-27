@@ -28,7 +28,8 @@ app.get("/", (c) => {
       },
     },
     docs: {
-      testLLM: "POST /api/trading/test-llm - Body: { \"prompt\": \"your prompt here\" }",
+      testLLM:
+        'POST /api/trading/test-llm - Body: { "prompt": "your prompt here" }',
       traditional: {
         analyze: "GET /api/trading/analyze?symbol=BTCUSDT&timeframe=15m",
         indicators: "GET /api/trading/indicators?symbol=BTCUSDT&timeframe=15m",

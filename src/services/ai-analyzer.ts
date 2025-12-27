@@ -10,9 +10,6 @@ import type {
 } from "../types/trading";
 import type { ICTAnalysis } from "../types/ict";
 
-// --- 1. DEFINISI SCHEMA ZOD (Validation Layer) ---
-
-// Schema untuk Analisa Teknikal Standar
 const StandardAnalysisSchema = z.object({
   signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]).describe("The trading decision"),
   confidence: z.number().min(0).max(100).describe("Confidence score 0-100%"),
@@ -52,8 +49,6 @@ const ICTAnalysisSchema = z.object({
   marketSummary: z.string(),
 });
 
-// --- 2. SERVICE CLASS ---
-
 export class AIAnalyzerService {
   private openRouter: any = null;
   private model: any = null;
@@ -79,7 +74,6 @@ export class AIAnalyzerService {
     return this.model;
   }
 
-  // Helper: Membuat string konteks data untuk prompt (Standard)
   private buildMarketContext(
     marketData: MarketData,
     indicators: TechnicalIndicators,
@@ -111,7 +105,6 @@ export class AIAnalyzerService {
     `;
   }
 
-  // Helper: Membuat string konteks data untuk prompt (ICT)
   private buildICTContext(ictAnalysis: ICTAnalysis): string {
     const {
       fairValueGaps,
@@ -122,7 +115,6 @@ export class AIAnalyzerService {
       confluence,
     } = ictAnalysis;
 
-    // Filter data aktif saja agar prompt ringkas
     const activeFVGs = fairValueGaps.filter((f) => !f.filled).slice(0, 3);
     const activeOBs = orderBlocks.filter((ob) => ob.active).slice(0, 3);
 
@@ -138,8 +130,6 @@ export class AIAnalyzerService {
       - Liquidity: Swept Buy(${liquidity.totalBuySideSwept}) / Sell(${liquidity.totalSellSideSwept})
     `;
   }
-
-
 
   // --- METHOD 1: ANALISA STANDAR ---
   async analyzeMarket(
@@ -157,7 +147,6 @@ export class AIAnalyzerService {
     marketSummary: string;
   }> {
     try {
-      // Panggil AI dengan generateText + structured output
       const { output } = await generateText({
         model: this.getModel(),
         output: Output.object({ schema: StandardAnalysisSchema }),
@@ -171,7 +160,6 @@ export class AIAnalyzerService {
 
       const object = output;
 
-      // Validasi Confidence (Risk Management Layer)
       const minConfidence = CONFIG.ai.minConfidenceForSignal;
       let finalSignal = object.signal;
       let finalReasoning = object.signalReasoning;
@@ -181,7 +169,6 @@ export class AIAnalyzerService {
         finalReasoning = `[AUTO-DOWNGRADE] AI Confidence (${object.confidence}%) is below threshold (${minConfidence}%). Reasoning: ${finalReasoning}`;
       }
 
-      // Mapping hasil object Zod ke return type aplikasi
       return {
         signal: {
           signal: finalSignal,
@@ -208,7 +195,6 @@ export class AIAnalyzerService {
     }
   }
 
-  // --- METHOD 2: ANALISA ICT ---
   async analyzeICTMarket(
     marketData: MarketData,
     indicators: TechnicalIndicators,
@@ -250,7 +236,6 @@ export class AIAnalyzerService {
 
       const object = output;
 
-      // Validasi Confidence
       const minConfidence = CONFIG.ai.minConfidenceForSignal;
       let finalSignal = object.signal;
       let finalReasoning = object.reasoning;
@@ -278,8 +263,8 @@ export class AIAnalyzerService {
         },
         riskConsiderations: object.riskConsiderations,
         marketSummary: object.marketSummary,
-        ictSpecific: object.ictSpecific, // Data khusus ICT
-        setup: object.setup, // Setup ICT
+        ictSpecific: object.ictSpecific,
+        setup: object.setup,
       };
     } catch (error) {
       throw new Error(
@@ -288,7 +273,6 @@ export class AIAnalyzerService {
     }
   }
 
-  // --- METHOD 3: TEST LLM PROMPT ---
   async testLLM(prompt: string): Promise<string> {
     try {
       const { text } = await generateText({

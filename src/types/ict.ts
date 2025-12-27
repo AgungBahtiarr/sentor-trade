@@ -140,5 +140,11 @@ export interface ICTTradingAnalysis {
   signal: ICTSignal;
   ictAnalysis: ICTAnalysis;
   secondaryIndicators: any;
+  marketData: {
+    symbol: string;
+    timeframe: string;
+    currentPrice: number;
+    priceChangePercent: number;
+  };
   timestamp: number;
 }

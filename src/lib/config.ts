@@ -23,7 +23,7 @@ export const CONFIG = {
     },
   },
   ai: {
-    model: "nex-agi/deepseek-v3.1-nex-n1:free",
+    model: "tngtech/deepseek-r1t2-chimera:free",
     temperature: 0.7,
     maxTokens: 1000,
     minConfidenceForSignal: 70,
