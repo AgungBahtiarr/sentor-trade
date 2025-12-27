@@ -107,7 +107,7 @@ src/
 The project uses an exchange abstraction pattern to easily switch between different cryptocurrency exchanges:
 
 - **Interface**: `IExchange` in `src/services/exchange/exchange-interface.ts` defines common methods
-- **Implementations**: Each exchange implements `IExchange` (e.g., `BybitExchange`)
+- **Implementations**: Each exchange implements `IExchange` (e.g., `BybitExchange`, `HyperliquidExchange`)
 - **Provider**: `ExchangeProvider` in `src/services/exchange/exchange-provider.ts` creates the appropriate exchange instance based on config
 - **Configuration**: Exchange provider is set in `src/lib/config.ts` under `exchange.provider`
 

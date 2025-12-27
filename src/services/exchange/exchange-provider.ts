@@ -1,4 +1,5 @@
 import { BybitExchange } from "./bybit";
+import { HyperliquidExchange } from "./hyperliquid";
 import type { IExchange } from "./exchange-interface";
 import { CONFIG } from "../../lib/config";
 
@@ -19,6 +20,8 @@ export class ExchangeProvider {
     switch (provider) {
       case 'bybit':
         return new BybitExchange();
+      case 'hyperliquid':
+        return new HyperliquidExchange();
 
       default:
         console.warn(`Exchange provider "${provider}" not found, using Bybit as default`);
