@@ -10,4 +10,4 @@ RUN bun install --frozen-lockfile
 COPY . .
 
 EXPOSE 3000
-CMD ["bun","--bun", "run", "src/index.tsx"]
+CMD ["bun","--bun", "run", "src/index.ts"]
