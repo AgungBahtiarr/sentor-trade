@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import tradingRouter from "./routes/trading";
-import uiRouter from "./routes/ui";
 
 const app = new Hono();
+
+app.use("/api/*", cors({ origin: ["http://localhost:5173"] }));
 
 app.get("/api", (c) => {
   return c.json({
@@ -52,7 +54,6 @@ app.get("/api", (c) => {
 });
 
 app.route("/api/trading", tradingRouter);
-app.route("/", uiRouter);
 
 Bun.serve({
   fetch: app.fetch,
