@@ -6,7 +6,9 @@ const app = new Hono();
 
 app.use(
   "/api/*",
-  cors({ origin: ["http://localhost:5173", "https://*.agungbahtiar.my.id"] }),
+  cors({
+    origin: ["http://localhost:5173", "https://sentor.agungbahtiar.my.id"],
+  }),
 );
 
 app.get("/api", (c) => {
