@@ -10,6 +10,7 @@ import type {
 } from "../types/trading";
 import type { ICTAnalysis } from "../types/ict";
 
+// ==================== SCHEMAS ====================
 const StandardAnalysisSchema = z.object({
   signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]).describe("The trading decision"),
   confidence: z.number().min(0).max(100).describe("Confidence score 0-100%"),
@@ -24,7 +25,6 @@ const StandardAnalysisSchema = z.object({
   marketSummary: z.string().describe("Brief market overview"),
 });
 
-// Schema untuk Analisa ICT (Lebih kompleks)
 const ICTAnalysisSchema = z.object({
   signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]),
   confidence: z.number().min(0).max(100),
@@ -49,12 +49,61 @@ const ICTAnalysisSchema = z.object({
   marketSummary: z.string(),
 });
 
-export class AIAnalyzerService {
-  private openRouter: any = null;
-  private model: any = null;
+// ==================== TYPES ====================
+type AnalysisResult = {
+  signal: TradingSignal;
+  trend: TrendAnalysis;
+  supportResistance: {
+    supportLevel: number;
+    resistanceLevel: number;
+    reasoning: string;
+  };
+  riskConsiderations: string;
+  marketSummary: string;
+};
 
+type ICTAnalysisResult = AnalysisResult & {
+  ictSpecific: string;
+  setup: {
+    primary: string;
+    confirmations: string[];
+    invalidations: string[];
+  };
+};
+
+type StandardSchemaOutput = z.infer<typeof StandardAnalysisSchema>;
+type ICTSchemaOutput = z.infer<typeof ICTAnalysisSchema>;
+
+// ==================== SERVICE ====================
+export class AIAnalyzerService {
+  private static instance: AIAnalyzerService;
+  private modelInstance: any = null;
+
+  private constructor() {
+    this.validateConfig();
+  }
+
+  // Singleton pattern
+  public static getInstance(): AIAnalyzerService {
+    if (!AIAnalyzerService.instance) {
+      AIAnalyzerService.instance = new AIAnalyzerService();
+    }
+    return AIAnalyzerService.instance;
+  }
+
+  // Config validation
+  private validateConfig(): void {
+    if (!CONFIG.ai?.model) {
+      throw new Error("AI model not configured in CONFIG");
+    }
+    if (typeof CONFIG.ai?.minConfidenceForSignal !== "number") {
+      throw new Error("minConfidenceForSignal not set in CONFIG");
+    }
+  }
+
+  // Model initialization with caching
   private getModel() {
-    if (!this.openRouter) {
+    if (!this.modelInstance) {
       const apiKey = getEnvVar("OPENROUTER_API_KEY");
       if (!apiKey) {
         throw new Error(
@@ -62,18 +111,13 @@ export class AIAnalyzerService {
         );
       }
 
-      this.openRouter = createOpenRouter({
-        apiKey,
-      });
+      const openRouter = createOpenRouter({ apiKey });
+      this.modelInstance = openRouter(CONFIG.ai.model);
     }
-
-    if (!this.model) {
-      this.model = this.openRouter(CONFIG.ai.model);
-    }
-
-    return this.model;
+    return this.modelInstance;
   }
 
+  // ==================== CONTEXT BUILDERS ====================
   private buildMarketContext(
     marketData: MarketData,
     indicators: TechnicalIndicators,
@@ -82,27 +126,24 @@ export class AIAnalyzerService {
       marketData;
     const { rsi, ema, macd } = indicators;
 
-    const recentCandles = candles
-      .slice(-5)
-      .map(
+    const recentCandles = candles.slice(-5);
+
+    return [
+      "MARKET CONTEXT:",
+      `Symbol: ${symbol} (${timeframe})`,
+      `Price: ${currentPrice} (${priceChangePercent}%)`,
+      "",
+      "INDICATORS:",
+      `RSI: ${rsi.toFixed(2)}`,
+      `EMA: 9(${ema.ema9.toFixed(2)}) / 21(${ema.ema21.toFixed(2)}) / 50(${ema.ema50.toFixed(2)})`,
+      `MACD: Hist ${macd.histogram.toFixed(2)}, Line ${macd.macdLine.toFixed(2)}`,
+      "",
+      "RECENT PRICE ACTION:",
+      ...recentCandles.map(
         (c, i) =>
           `Candle ${i + 1}: O=${c.open}, H=${c.high}, L=${c.low}, C=${c.close}`,
-      )
-      .join("\n");
-
-    return `
-      MARKET CONTEXT:
-      Symbol: ${symbol} (${timeframe})
-      Price: ${currentPrice} (${priceChangePercent}%)
-
-      INDICATORS:
-      RSI: ${rsi.toFixed(2)}
-      EMA: 9(${ema.ema9.toFixed(2)}) / 21(${ema.ema21.toFixed(2)}) / 50(${ema.ema50.toFixed(2)})
-      MACD: Hist ${macd.histogram.toFixed(2)}, Line ${macd.macdLine.toFixed(2)}
-
-      RECENT PRICE ACTION:
-      ${recentCandles}
-    `;
+      ),
+    ].join("\n");
   }
 
   private buildICTContext(ictAnalysis: ICTAnalysis): string {
@@ -118,161 +159,340 @@ export class AIAnalyzerService {
     const activeFVGs = fairValueGaps.filter((f) => !f.filled).slice(0, 3);
     const activeOBs = orderBlocks.filter((ob) => ob.active).slice(0, 3);
 
-    return `
-      ICT STRUCTURE CONTEXT:
-      - Structure: ${marketStructure.trend} (${marketStructure.currentStructure.phase})
-      - Kill Zone: ${timeAnalysis.killZone.active ? "ACTIVE" : "INACTIVE"} (${timeAnalysis.session})
-      - Confluence Score: Bull ${confluence.bullishScore} / Bear ${confluence.bearishScore}
-
-      KEY ARRAYS:
-      - FVGs: ${activeFVGs.map((f) => `${f.type} @ ${f.mid}`).join(", ") || "None"}
-      - Order Blocks: ${activeOBs.map((ob) => `${ob.type} @ ${ob.close}`).join(", ") || "None"}
-      - Liquidity: Swept Buy(${liquidity.totalBuySideSwept}) / Sell(${liquidity.totalSellSideSwept})
-    `;
+    return [
+      "ICT STRUCTURE CONTEXT:",
+      `- Structure: ${marketStructure.trend} (${marketStructure.currentStructure.phase})`,
+      `- Kill Zone: ${timeAnalysis.killZone.active ? "ACTIVE" : "INACTIVE"} (${timeAnalysis.session})`,
+      `- Confluence Score: Bull ${confluence.bullishScore} / Bear ${confluence.bearishScore}`,
+      "",
+      "KEY ARRAYS:",
+      `- FVGs: ${activeFVGs.map((f) => `${f.type} @ ${f.mid}`).join(", ") || "None"}`,
+      `- Order Blocks: ${activeOBs.map((ob) => `${ob.type} @ ${ob.close}`).join(", ") || "None"}`,
+      `- Liquidity: Swept Buy(${liquidity.totalBuySideSwept}) / Sell(${liquidity.totalSellSideSwept})`,
+    ].join("\n");
   }
 
-  // --- METHOD 1: ANALISA STANDAR ---
+  // ==================== SHARED ANALYSIS METHOD ====================
+  private async analyzeWithSchema<
+    T extends { signal: string; confidence: number },
+  >(
+    schema: z.ZodSchema<T>,
+    systemPrompt: string,
+    userPrompt: string,
+  ): Promise<T> {
+    const { output } = await generateText({
+      model: this.getModel(),
+      output: Output.object({ schema }),
+      system: systemPrompt,
+      prompt: userPrompt,
+    });
+
+    // Auto-downgrade logic for low confidence
+    const minConfidence = CONFIG.ai.minConfidenceForSignal;
+    if (output.signal !== "NO_SIGNAL" && output.confidence < minConfidence) {
+      const reasoningKey =
+        "reasoning" in output ? "reasoning" : "signalReasoning";
+      const originalReasoning = (output as any)[reasoningKey] || "";
+
+      return {
+        ...output,
+        signal: "NO_SIGNAL" as any,
+        [reasoningKey]: `[AUTO-DOWNGRADE] Confidence (${output.confidence}%) below threshold (${minConfidence}%). Original: ${originalReasoning}`,
+      };
+    }
+
+    return output;
+  }
+
+  // ==================== FALLBACK GENERATOR ====================
+  private createFallbackResult(
+    marketData: MarketData,
+    errorMessage: string,
+  ): AnalysisResult {
+    return {
+      signal: {
+        signal: "NO_SIGNAL",
+        confidence: 0,
+        reasoning: `Analysis failed: ${errorMessage}`,
+      },
+      trend: {
+        trend: "NEUTRAL",
+        strength: "WEAK",
+        description: "Error occurred during analysis",
+      },
+      supportResistance: {
+        supportLevel: marketData.currentPrice * 0.95,
+        resistanceLevel: marketData.currentPrice * 1.05,
+        reasoning: "Fallback levels due to analysis error",
+      },
+      riskConsiderations: "⚠️ System error - avoid trading until resolved",
+      marketSummary: `Analysis Error: ${errorMessage}`,
+    };
+  }
+
+  // ==================== STANDARD ANALYSIS ====================
   async analyzeMarket(
     marketData: MarketData,
     indicators: TechnicalIndicators,
-  ): Promise<{
-    signal: TradingSignal;
-    trend: TrendAnalysis;
-    supportResistance: {
-      supportLevel: number;
-      resistanceLevel: number;
-      reasoning: string;
-    };
-    riskConsiderations: string;
-    marketSummary: string;
-  }> {
+  ): Promise<AnalysisResult> {
     try {
-      const { output } = await generateText({
-        model: this.getModel(),
-        output: Output.object({ schema: StandardAnalysisSchema }),
-        system: `You are an expert Crypto Futures Trader.
-                 Analyze the provided data.
-                 Prioritize Trend Following.
-                 Only signal BUY/SELL if confidence is >70% with strong confluence.
-                 Otherwise signal NO_SIGNAL.`,
-        prompt: `Analyze this market data:\n${this.buildMarketContext(marketData, indicators)}`,
-      });
+      const systemPrompt = `You are an elite Crypto Futures Trader with 10+ years experience. Your analysis must be PRECISE and ACTIONABLE.
 
-      const object = output;
+**DECISION FRAMEWORK:**
+1. **TREND FIRST** - Never trade against the dominant trend
+   - Bullish: Price above EMA50 + Rising EMA9/21 + RSI > 50
+   - Bearish: Price below EMA50 + Falling EMA9/21 + RSI < 50
+   - Neutral: Mixed signals or choppy price action
 
-      const minConfidence = CONFIG.ai.minConfidenceForSignal;
-      let finalSignal = object.signal;
-      let finalReasoning = object.signalReasoning;
+2. **ENTRY CRITERIA** (ALL must align for BUY/SELL):
+   ✅ BUY Requirements:
+      - Bullish trend confirmed
+      - RSI: 30-70 (avoid overbought)
+      - MACD: Positive histogram + bullish crossover
+      - Price: Near support or breaking resistance with volume
+      - Recent candles: Higher lows pattern
+      - Confidence: Must be >75%
 
-      if (finalSignal !== "NO_SIGNAL" && object.confidence < minConfidence) {
-        finalSignal = "NO_SIGNAL";
-        finalReasoning = `[AUTO-DOWNGRADE] AI Confidence (${object.confidence}%) is below threshold (${minConfidence}%). Reasoning: ${finalReasoning}`;
-      }
+   ✅ SELL Requirements:
+      - Bearish trend confirmed
+      - RSI: 30-70 (avoid oversold)
+      - MACD: Negative histogram + bearish crossover
+      - Price: Near resistance or breaking support with volume
+      - Recent candles: Lower highs pattern
+      - Confidence: Must be >75%
+
+3. **NO_SIGNAL Triggers** (Safety first):
+   - Conflicting indicators (e.g., bullish trend but bearish MACD)
+   - RSI in extreme zones (<30 or >70)
+   - Choppy/sideways price action
+   - Low confidence (<75%)
+   - Major S/R zone nearby without clear breakout
+
+**SUPPORT/RESISTANCE RULES:**
+- Support: Recent swing lows, EMA50, psychological levels
+- Resistance: Recent swing highs, previous breakout points
+- Must be within 5% of current price to be relevant
+
+**OUTPUT QUALITY:**
+- Be specific with numbers and levels
+- Explain WHY, not just WHAT
+- Always consider risk-reward ratio
+- Default to NO_SIGNAL when uncertain`;
+
+      const userPrompt = `Analyze this market data:\n${this.buildMarketContext(marketData, indicators)}
+
+**YOUR TASK:**
+1. Identify the current trend and strength
+2. Check if ALL entry criteria align for BUY/SELL
+3. Calculate precise support/resistance levels
+4. Assess risk factors
+5. Provide actionable signal with detailed reasoning`;
+
+      const output = await this.analyzeWithSchema<StandardSchemaOutput>(
+        StandardAnalysisSchema,
+        systemPrompt,
+        userPrompt,
+      );
 
       return {
         signal: {
-          signal: finalSignal,
-          confidence: object.confidence,
-          reasoning: finalReasoning,
+          signal: output.signal,
+          confidence: output.confidence,
+          reasoning: output.signalReasoning,
         },
         trend: {
-          trend: object.trend,
-          strength: object.trendStrength,
-          description: object.trendDescription,
+          trend: output.trend,
+          strength: output.trendStrength,
+          description: output.trendDescription,
         },
         supportResistance: {
-          supportLevel: object.supportLevel,
-          resistanceLevel: object.resistanceLevel,
-          reasoning: object.levelReasoning,
+          supportLevel: output.supportLevel,
+          resistanceLevel: output.resistanceLevel,
+          reasoning: output.levelReasoning,
         },
-        riskConsiderations: object.riskConsiderations,
-        marketSummary: object.marketSummary,
+        riskConsiderations: output.riskConsiderations,
+        marketSummary: output.marketSummary,
       };
     } catch (error) {
-      throw new Error(
-        `Standard AI analysis failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      console.error("❌ Standard AI analysis error:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return this.createFallbackResult(marketData, errorMsg);
     }
   }
 
+  // ==================== ICT ANALYSIS ====================
   async analyzeICTMarket(
     marketData: MarketData,
     indicators: TechnicalIndicators,
     ictAnalysis: ICTAnalysis,
-  ): Promise<{
-    signal: TradingSignal;
-    trend: TrendAnalysis;
-    supportResistance: {
-      supportLevel: number;
-      resistanceLevel: number;
-      reasoning: string;
-    };
-    riskConsiderations: string;
-    marketSummary: string;
-    ictSpecific: string;
-    setup: {
-      primary: string;
-      confirmations: string[];
-      invalidations: string[];
-    };
-  }> {
+  ): Promise<ICTAnalysisResult> {
     try {
       const marketCtx = this.buildMarketContext(marketData, indicators);
       const ictCtx = this.buildICTContext(ictAnalysis);
 
-      const { output } = await generateText({
-        model: this.getModel(),
-        output: Output.object({ schema: ICTAnalysisSchema }),
-        system: `You are an ICT (Inner Circle Trader) Specialist.
-                 Weight ICT concepts (FVG, Order Blocks, Liquidity) as 80% of your decision.
-                 Use Traditional indicators only as secondary confirmation.
+      const systemPrompt = `You are a MASTER ICT (Inner Circle Trader) Specialist following Michael Huddleston's methodology.
 
-                 RULES:
-                 1. BUY ONLY if: Bullish OB retest OR Bullish FVG Fill + Liquidity Sweep.
-                 2. SELL ONLY if: Bearish OB retest OR Bearish FVG Fill + Liquidity Sweep.
-                 3. If structure is unclear or outside Kill Zones, signal NO_SIGNAL.`,
-        prompt: `Analyze this market setup:\n${marketCtx}\n\n${ictCtx}`,
-      });
+**ICT CORE PRINCIPLES (80% weight):**
 
-      const object = output;
+1. **MARKET STRUCTURE ANALYSIS**
+   - Bullish: Series of Higher Highs (HH) + Higher Lows (HL)
+   - Bearish: Series of Lower Highs (LH) + Lower Lows (LL)
+   - Only trade WITH structure, never against it
 
-      const minConfidence = CONFIG.ai.minConfidenceForSignal;
-      let finalSignal = object.signal;
-      let finalReasoning = object.reasoning;
+2. **ORDER BLOCKS (Primary Setup)**
+   ✅ BULLISH Entry:
+      - Price returns to BULLISH Order Block (last down candle before rally)
+      - OB must be ACTIVE (not violated)
+      - Confluence: Near FVG or liquidity sweep
+      - Entry: OB retest with rejection wick
 
-      if (finalSignal !== "NO_SIGNAL" && object.confidence < minConfidence) {
-        finalSignal = "NO_SIGNAL";
-        finalReasoning = `[AUTO-DOWNGRADE] Confidence (${object.confidence}%) below threshold. ${finalReasoning}`;
-      }
+   ✅ BEARISH Entry:
+      - Price returns to BEARISH Order Block (last up candle before drop)
+      - OB must be ACTIVE (not violated)
+      - Confluence: Near FVG or liquidity sweep
+      - Entry: OB retest with rejection wick
+
+3. **FAIR VALUE GAPS (FVG) - Premium Setups**
+   - FVG = Imbalance/gap in 3-candle sequence
+   - BULLISH: Enter when price fills bearish FVG (buy the discount)
+   - BEARISH: Enter when price fills bullish FVG (sell the premium)
+   - Only trade UNFILLED gaps - ignore filled ones
+
+4. **LIQUIDITY CONCEPTS**
+   - Smart Money HUNTS liquidity before reversal
+   - Bullish Setup: Look for sell-side liquidity sweep (stop hunt below lows) → then buy
+   - Bearish Setup: Look for buy-side liquidity sweep (stop hunt above highs) → then sell
+   - Recent sweeps are CRITICAL confirmation
+
+5. **KILL ZONES (Timing)**
+   🟢 LONDON: 2-5 AM EST (High probability setups)
+   🟢 NEW YORK: 8-11 AM EST (Highest volume, best entries)
+   🔴 AVOID: Asian session unless VERY strong setup
+   - If NOT in kill zone → Reduce confidence by 20-30%
+
+6. **CONFLUENCE SCORING (Must have 3+ for signal)**
+   - Order Block retest (Primary)
+   - FVG fill (Primary)
+   - Liquidity sweep (High value)
+   - Market structure alignment
+   - Kill zone active
+   - Traditional indicators support
+
+**TRADITIONAL INDICATORS (20% weight - Confirmation only):**
+- RSI: Just for overbought/oversold context
+- EMA: Trend filter only
+- MACD: Secondary confirmation
+
+**ENTRY REQUIREMENTS:**
+✅ BUY Signal:
+   1. Market structure: BULLISH (HH + HL pattern)
+   2. One of: Bullish OB retest OR Bearish FVG fill
+   3. Liquidity: Recent sell-side sweep preferred
+   4. Confluence score: BULLISH > 3
+   5. Kill zone: Active (or very strong setup if not)
+   6. Confidence: >70%
+
+✅ SELL Signal:
+   1. Market structure: BEARISH (LH + LL pattern)
+   2. One of: Bearish OB retest OR Bullish FVG fill
+   3. Liquidity: Recent buy-side sweep preferred
+   4. Confluence score: BEARISH > 3
+   5. Kill zone: Active (or very strong setup if not)
+   6. Confidence: >70%
+
+🚫 NO_SIGNAL when:
+   - Market structure unclear/choppy
+   - No valid OB or FVG setup
+   - Outside kill zones with weak confluence
+   - Conflicting ICT signals
+   - Confidence <70%
+
+**INVALIDATIONS (Setup is VOID if):**
+- Order Block violated (price closes through it)
+- FVG already filled completely
+- Market structure breaks (trend reversal)
+- Stop loss level breached
+
+**OUTPUT REQUIREMENTS:**
+- Specify exact ICT concepts triggering signal
+- Name the primary setup (e.g., "Bearish Breaker + FVG Confluence")
+- List 3+ confirmations
+- Define clear invalidation levels`;
+
+      const userPrompt = `Perform deep ICT analysis on this market:\n${marketCtx}\n\n${ictCtx}
+
+**YOUR ANALYSIS STEPS:**
+1. Determine market structure (HH/HL or LH/LL)
+2. Identify active Order Blocks and unfilled FVGs
+3. Check for recent liquidity sweeps
+4. Assess kill zone timing
+5. Calculate confluence score (bullish vs bearish)
+6. Validate ALL entry requirements
+7. Define setup invalidations
+8. Provide actionable signal with ICT-specific reasoning`;
+
+      const output = await this.analyzeWithSchema<ICTSchemaOutput>(
+        ICTAnalysisSchema,
+        systemPrompt,
+        userPrompt,
+      );
 
       return {
         signal: {
-          signal: finalSignal,
-          confidence: object.confidence,
-          reasoning: finalReasoning,
+          signal: output.signal,
+          confidence: output.confidence,
+          reasoning: output.reasoning,
         },
         trend: {
-          trend: object.trend,
-          strength: object.trendStrength,
-          description: object.trendDescription,
+          trend: output.trend,
+          strength: output.trendStrength,
+          description: output.trendDescription,
         },
         supportResistance: {
-          supportLevel: object.supportLevel,
-          resistanceLevel: object.resistanceLevel,
-          reasoning: object.levelReasoning,
+          supportLevel: output.supportLevel,
+          resistanceLevel: output.resistanceLevel,
+          reasoning: output.levelReasoning,
         },
-        riskConsiderations: object.riskConsiderations,
-        marketSummary: object.marketSummary,
-        ictSpecific: object.ictSpecific,
-        setup: object.setup,
+        riskConsiderations: output.riskConsiderations,
+        marketSummary: output.marketSummary,
+        ictSpecific: output.ictSpecific,
+        setup: output.setup,
       };
     } catch (error) {
-      throw new Error(
-        `ICT AI analysis failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      console.error("❌ ICT AI analysis error:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const fallback = this.createFallbackResult(marketData, errorMsg);
+
+      return {
+        ...fallback,
+        ictSpecific: "Analysis failed",
+        setup: {
+          primary: "Error",
+          confirmations: [],
+          invalidations: ["System error occurred"],
+        },
+      };
     }
   }
 
+  // ==================== PARALLEL ANALYSIS ====================
+  async analyzeMarketBoth(
+    marketData: MarketData,
+    indicators: TechnicalIndicators,
+    ictAnalysis: ICTAnalysis,
+  ): Promise<{
+    standard: AnalysisResult;
+    ict: ICTAnalysisResult;
+  }> {
+    const [standard, ict] = await Promise.all([
+      this.analyzeMarket(marketData, indicators),
+      this.analyzeICTMarket(marketData, indicators, ictAnalysis),
+    ]);
+
+    return { standard, ict };
+  }
+
+  // ==================== LLM TEST ====================
   async testLLM(prompt: string): Promise<string> {
     try {
       const { text } = await generateText({
@@ -281,11 +501,11 @@ export class AIAnalyzerService {
       });
       return text;
     } catch (error) {
-      throw new Error(
-        `LLM test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`LLM test failed: ${errorMsg}`);
     }
   }
 }
 
-export const aiAnalyzerService = new AIAnalyzerService();
+// Export singleton instance
+export const aiAnalyzerService = AIAnalyzerService.getInstance();

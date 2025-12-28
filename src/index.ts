@@ -49,6 +49,9 @@ app.get("/api", (c) => {
           "GET /api/trading/ict/structure?symbol=BTCUSDT&timeframe=15m",
         time: "GET /api/trading/ict/time",
       },
+      both: {
+        full: "GET /api/trading/ict/analyze/both?symbol=BTCUSDT&timeframe=15m&higherTimeframe=4h",
+      },
     },
   });
 });
