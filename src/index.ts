@@ -4,7 +4,10 @@ import tradingRouter from "./routes/trading";
 
 const app = new Hono();
 
-app.use("/api/*", cors({ origin: ["http://localhost:5173"] }));
+app.use(
+  "/api/*",
+  cors({ origin: ["http://localhost:5173", "https://*.agungbahtiar.my.id"] }),
+);
 
 app.get("/api", (c) => {
   return c.json({
