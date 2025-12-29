@@ -161,6 +161,41 @@ tradingRouter.get("/fighter/analyze", async (c) => {
       indicators,
     );
 
+    // Conditionally calculate risk management for actionable signals (scalping style)
+    let riskManagement;
+    if (aiAnalysis.signal.signal === 'BUY' || aiAnalysis.signal.signal === 'SELL') {
+      // Calculate optimal stop loss for scalping (tighter)
+      const stopLoss = determineStopLoss(
+        aiAnalysis.signal.signal,
+        marketData.currentPrice,
+        aiAnalysis.supportResistance.supportLevel,
+        aiAnalysis.supportResistance.resistanceLevel,
+      );
+
+      // Calculate multiple take profit levels for scalping (1:1 to 1:2 RR)
+      const takeProfits = calculateTakeProfits(
+        aiAnalysis.signal.signal,
+        marketData.currentPrice,
+        stopLoss,
+        aiAnalysis.supportResistance.resistanceLevel,
+        aiAnalysis.supportResistance.supportLevel,
+      );
+
+      // Calculate risk-reward for first TP
+      const riskReward = calculateRiskReward(
+        marketData.currentPrice,
+        stopLoss,
+        takeProfits[0],
+      );
+
+      riskManagement = {
+        entry: marketData.currentPrice,
+        stopLoss: stopLoss,
+        takeProfit: takeProfits,
+        riskReward: riskReward,
+      };
+    }
+
     const analysis: TradingAnalysis = {
       marketData,
       indicators,
@@ -188,6 +223,7 @@ tradingRouter.get("/fighter/analyze", async (c) => {
         aiReasoning: aiAnalysis.signal.reasoning,
         riskConsiderations: aiAnalysis.riskConsiderations,
         marketSummary: aiAnalysis.marketSummary,
+        riskManagement,
       },
     });
   } catch (error) {
