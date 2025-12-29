@@ -23,7 +23,7 @@ export const CONFIG = {
     },
   },
   ai: {
-    model: "tngtech/deepseek-r1t2-chimera:free",
+    model: "google/gemini-2.5-flash-lite",
     temperature: 0.7,
     maxTokens: 1000,
     minConfidenceForSignal: 60,
