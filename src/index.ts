@@ -20,11 +20,15 @@ app.get("/api", (c) => {
       health: "/api/trading/health",
       testLLM: "/api/trading/test-llm - Test LLM with custom prompt",
 
-      traditional: {
-        analyze: "/api/trading/analyze",
-        indicators: "/api/trading/indicators",
-        price: "/api/trading/price",
-      },
+       traditional: {
+         analyze: "/api/trading/analyze",
+         indicators: "/api/trading/indicators",
+         price: "/api/trading/price",
+       },
+
+       fighter: {
+         analyze: "/api/trading/fighter/analyze - Scalping-focused analysis with flexible criteria",
+       },
 
       ict: {
         analyze: "/api/trading/ict/analyze - Full ICT analysis with AI signals",
@@ -38,11 +42,15 @@ app.get("/api", (c) => {
     docs: {
       testLLM:
         'POST /api/trading/test-llm - Body: { "prompt": "your prompt here" }',
-      traditional: {
-        analyze: "GET /api/trading/analyze?symbol=BTCUSDT&timeframe=15m",
-        indicators: "GET /api/trading/indicators?symbol=BTCUSDT&timeframe=15m",
-        price: "GET /api/trading/price?symbol=BTCUSDT",
-      },
+       traditional: {
+         analyze: "GET /api/trading/analyze?symbol=BTCUSDT&timeframe=15m",
+         indicators: "GET /api/trading/indicators?symbol=BTCUSDT&timeframe=15m",
+         price: "GET /api/trading/price?symbol=BTCUSDT",
+       },
+
+       fighter: {
+         analyze: "GET /api/trading/fighter/analyze?symbol=BTCUSDT&timeframe=5m - Optimized for scalping with flexible signal criteria",
+       },
       ict: {
         full: "GET /api/trading/ict/analyze?symbol=BTCUSDT&timeframe=15m&higherTimeframe=4h",
         fvg: "GET /api/trading/ict/fvg?symbol=BTCUSDT&timeframe=15m",

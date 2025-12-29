@@ -54,6 +54,21 @@ const ICTAnalysisSchema = z.object({
   timeframeAnalysis: z.string().optional().describe("Timeframe analysis and recommendations"),
 });
 
+const FighterAnalysisSchema = z.object({
+  signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]).describe("The trading decision"),
+  confidence: z.number().min(0).max(100).describe("Confidence score 0-100%"),
+  signalReasoning: z.string().describe("Explanation for the signal decision"),
+  trend: z.enum(["BULLISH", "BEARISH", "NEUTRAL"]),
+  trendStrength: z.enum(["STRONG", "MODERATE", "WEAK"]),
+  trendDescription: z.string().describe("Context about the trend"),
+  supportLevel: z.number().describe("Nearest key support price"),
+  resistanceLevel: z.number().describe("Nearest key resistance price"),
+  levelReasoning: z.string().describe("Why these levels matter"),
+  riskConsiderations: z.string().describe("Risk factors to watch"),
+  marketSummary: z.string().describe("Brief market overview"),
+  scalpingTimeframe: z.string().optional().describe("Optimal timeframe for scalping this signal"),
+});
+
 // ==================== TYPES ====================
 type AnalysisResult = {
   signal: TradingSignal;
@@ -76,8 +91,14 @@ type ICTAnalysisResult = AnalysisResult & {
   };
 };
 
+type FighterAnalysisResult = AnalysisResult & {
+  scalpingTimeframe?: string;
+};
+
 type StandardSchemaOutput = z.infer<typeof StandardAnalysisSchema>;
 type ICTSchemaOutput = z.infer<typeof ICTAnalysisSchema>;
+type FighterSchemaOutput = z.infer<typeof FighterAnalysisSchema>;
+type FighterSchemaOutput = z.infer<typeof FighterAnalysisSchema>;
 
 // ==================== SERVICE ====================
 export class AIAnalyzerService {
@@ -492,6 +513,105 @@ export class AIAnalyzerService {
           confirmations: [],
           invalidations: ["System error occurred"],
         },
+      };
+    }
+  }
+
+  // ==================== FIGHTER ANALYSIS ====================
+  async analyzeFighterMarket(
+    marketData: MarketData,
+    indicators: TechnicalIndicators,
+  ): Promise<FighterAnalysisResult> {
+    try {
+      const systemPrompt = `You are an elite Scalping Specialist with 10+ years experience in crypto futures. Your analysis is designed for QUICK, HIGH-FREQUENCY trades with FAST entries and exits.
+
+**SCALPING DECISION FRAMEWORK:**
+1. **MOMENTUM FIRST** - Capture short-term price swings, not long-term trends
+   - Bullish: Recent candles showing upward momentum + RSI trending up
+   - Bearish: Recent candles showing downward momentum + RSI trending down
+   - Neutral: Sideways/choppy with no clear momentum
+
+2. **ENTRY CRITERIA** (MOST must align for BUY/SELL - more flexible than standard):
+    ✅ BUY Requirements:
+       - Momentum: Bullish or at least not bearish
+       - RSI: 20-80 (tolerate overbought for quick scalps)
+       - MACD: Positive histogram OR bullish crossover (not both required)
+       - Price: Near support OR showing bounce pattern
+       - Recent candles: At least 2 of last 3 candles bullish
+       - Confidence: Must be >50% (lower threshold for scalping)
+
+    ✅ SELL Requirements:
+       - Momentum: Bearish or at least not bullish
+       - RSI: 20-80 (tolerate oversold for quick scalps)
+       - MACD: Negative histogram OR bearish crossover (not both required)
+       - Price: Near resistance OR showing rejection pattern
+       - Recent candles: At least 2 of last 3 candles bearish
+       - Confidence: Must be >50%
+
+ 3. **NO_SIGNAL Triggers** (Less conservative):
+    - RSI in extreme zones (<20 or >80) BUT only if momentum strongly opposes
+    - Very choppy price action with conflicting momentum
+    - Confidence <50%
+    - No momentum in recent candles
+
+**SCALPING SUPPORT/RESISTANCE RULES:**
+- Support: Recent swing lows, EMA9/21, minor psychological levels
+- Resistance: Recent swing highs, previous minor breakouts
+- Must be within 2% of current price (tighter for scalps)
+- Target quick 0.5-1% moves, not major S/R breaks
+
+**OUTPUT QUALITY FOR SCALPING:**
+- Focus on IMMEDIATE momentum, not long-term analysis
+- Target 1:1 to 1:2 risk-reward (quick profits, tight stops)
+- Emphasize entry timing and exit signals
+- Add scalping warnings: "⚡ HIGH FREQUENCY: Monitor closely, exit quickly on momentum shift"
+- If confidence 50-65%, include "⚠️ SCALP RISK: Higher frequency needed, tight stops essential"
+- Default to NO_SIGNAL only when truly no momentum`;
+
+      const userPrompt = `Analyze this market data for scalping opportunities:\n${this.buildMarketContext(marketData, indicators)}
+
+**YOUR TASK:**
+1. Identify current momentum direction and strength
+2. Check if MOST entry criteria align for BUY/SELL (not all required)
+3. Calculate tight support/resistance levels for quick scalps
+4. Assess scalping-specific risk factors
+5. Provide actionable signal with scalping reasoning
+6. Recommend optimal timeframe for this scalp (e.g., "1m-5m for quick entries")`;
+
+      const output = await this.analyzeWithSchema<FighterSchemaOutput>(
+        FighterAnalysisSchema,
+        systemPrompt,
+        userPrompt,
+      );
+
+      return {
+        signal: {
+          signal: output.signal,
+          confidence: output.confidence,
+          reasoning: output.signalReasoning,
+        },
+        trend: {
+          trend: output.trend,
+          strength: output.trendStrength,
+          description: output.trendDescription,
+        },
+        supportResistance: {
+          supportLevel: output.supportLevel,
+          resistanceLevel: output.resistanceLevel,
+          reasoning: output.levelReasoning,
+        },
+        riskConsiderations: output.riskConsiderations,
+        marketSummary: output.marketSummary,
+        scalpingTimeframe: output.scalpingTimeframe,
+      };
+    } catch (error) {
+      console.error("❌ Fighter AI analysis error:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const fallback = this.createFallbackResult(marketData, errorMsg);
+
+      return {
+        ...fallback,
+        scalpingTimeframe: "Analysis failed",
       };
     }
   }

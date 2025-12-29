@@ -50,6 +50,8 @@ export interface SupportResistance {
   nearestResistance: number;
 }
 
+export type AnalysisMode = 'STANDARD' | 'ICT' | 'FIGHTER';
+
 export interface TradingAnalysis {
   marketData: MarketData;
   indicators: TechnicalIndicators;

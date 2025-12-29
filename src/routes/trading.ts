@@ -139,6 +139,70 @@ tradingRouter.get("/analyze", async (c) => {
   }
 });
 
+// ==================== FIGHTER ANALYSIS ENDPOINT ====================
+tradingRouter.get("/fighter/analyze", async (c) => {
+  try {
+    const symbol = c.req.query("symbol") || "BTCUSDT";
+    const timeframe = c.req.query("timeframe") || "5m";
+    console.log("⚡ Fighter Analysis (Scalping):", { symbol, timeframe });
+
+    // Fetch market data and calculate indicators
+    const marketData = await exchangeService.getMarketData(symbol, timeframe);
+    const indicators = indicatorsService.calculateAllIndicators(
+      marketData.candles,
+    );
+    const supportResistance = indicatorsService.analyzeSupportResistance(
+      marketData.candles,
+    );
+
+    // AI Analysis with fighter prompts optimized for scalping
+    const aiAnalysis = await aiAnalyzerService.analyzeFighterMarket(
+      marketData,
+      indicators,
+    );
+
+    const analysis: TradingAnalysis = {
+      marketData,
+      indicators,
+      signal: aiAnalysis.signal,
+      trend: aiAnalysis.trend,
+      supportResistance: {
+        support: supportResistance.support,
+        resistance: supportResistance.resistance,
+        nearestSupport:
+          aiAnalysis.supportResistance.supportLevel ||
+          supportResistance.nearestSupport,
+        nearestResistance:
+          aiAnalysis.supportResistance.resistanceLevel ||
+          supportResistance.nearestResistance,
+      },
+      timestamp: Date.now(),
+    };
+
+    return c.json({
+      success: true,
+      data: analysis,
+      meta: {
+        mode: "fighter",
+        scalpingTimeframe: aiAnalysis.scalpingTimeframe,
+        aiReasoning: aiAnalysis.signal.reasoning,
+        riskConsiderations: aiAnalysis.riskConsiderations,
+        marketSummary: aiAnalysis.marketSummary,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Fighter analysis error:", error);
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to analyze market",
+      },
+      500,
+    );
+  }
+});
+
 // ==================== ICT ANALYSIS ENDPOINT (OPTIMIZED) ====================
 tradingRouter.get("/ict/analyze", async (c) => {
   try {
