@@ -49,7 +49,7 @@ function determineStopLoss(
 }
 
 /**
- * Calculate multiple take profit levels
+ * Calculate multiple take profit levels with improved risk-reward ratios
  */
 function calculateTakeProfits(
   signalType: string,
@@ -62,15 +62,15 @@ function calculateTakeProfits(
 
   if (signalType === "BUY") {
     return [
-      entry + risk * 1.5, // TP1: 1.5R
-      entry + risk * 2.5, // TP2: 2.5R
-      resistance > entry ? resistance : entry + risk * 4, // TP3: Resistance or 4R
+      entry + risk * 2, // TP1: 2R (minimum 1:2 RR)
+      entry + risk * 3, // TP2: 3R
+      resistance > entry ? resistance : entry + risk * 5, // TP3: Resistance or 5R
     ];
   } else if (signalType === "SELL") {
     return [
-      entry - risk * 1.5, // TP1: 1.5R
-      entry - risk * 2.5, // TP2: 2.5R
-      support > 0 && support < entry ? support : entry - risk * 4, // TP3: Support or 4R
+      entry - risk * 2, // TP1: 2R (minimum 1:2 RR)
+      entry - risk * 3, // TP2: 3R
+      support > 0 && support < entry ? support : entry - risk * 5, // TP3: Support or 5R
     ];
   }
 
@@ -184,29 +184,40 @@ tradingRouter.get("/ict/analyze", async (c) => {
     const finalSupport = aiAnalysis.supportResistance.supportLevel;
     const finalResistance = aiAnalysis.supportResistance.resistanceLevel;
 
-    // Calculate optimal stop loss
-    const stopLoss = determineStopLoss(
-      aiAnalysis.signal.signal,
-      marketData.currentPrice,
-      finalSupport,
-      finalResistance,
-    );
+    // Conditionally calculate risk management only for actionable signals
+    let riskManagement;
+    if (aiAnalysis.signal.signal === 'BUY' || aiAnalysis.signal.signal === 'SELL') {
+      // Calculate optimal stop loss
+      const stopLoss = determineStopLoss(
+        aiAnalysis.signal.signal,
+        marketData.currentPrice,
+        finalSupport,
+        finalResistance,
+      );
 
-    // Calculate multiple take profit levels
-    const takeProfits = calculateTakeProfits(
-      aiAnalysis.signal.signal,
-      marketData.currentPrice,
-      stopLoss,
-      finalResistance,
-      finalSupport,
-    );
+      // Calculate multiple take profit levels
+      const takeProfits = calculateTakeProfits(
+        aiAnalysis.signal.signal,
+        marketData.currentPrice,
+        stopLoss,
+        finalResistance,
+        finalSupport,
+      );
 
-    // Calculate risk-reward for first TP
-    const riskReward = calculateRiskReward(
-      marketData.currentPrice,
-      stopLoss,
-      takeProfits[0],
-    );
+      // Calculate risk-reward for first TP
+      const riskReward = calculateRiskReward(
+        marketData.currentPrice,
+        stopLoss,
+        takeProfits[0],
+      );
+
+      riskManagement = {
+        entry: marketData.currentPrice,
+        stopLoss: stopLoss,
+        takeProfit: takeProfits,
+        riskReward: riskReward,
+      };
+    }
 
     const signal: ICTSignal = {
       type: aiAnalysis.signal.signal,
@@ -214,12 +225,12 @@ tradingRouter.get("/ict/analyze", async (c) => {
       confidence: aiAnalysis.signal.confidence,
       reasoning: aiAnalysis.signal.reasoning,
       setup: aiAnalysis.setup,
-      riskManagement: {
-        entry: marketData.currentPrice,
-        stopLoss: stopLoss,
-        takeProfit: takeProfits,
-        riskReward: riskReward,
-      },
+      riskManagement,
+      signalMethod: aiAnalysis.signalMethod,
+      predictedDirection: aiAnalysis.predictedDirection,
+      predictedConfidence: aiAnalysis.predictedConfidence,
+      predictedMethod: aiAnalysis.predictedMethod,
+      timeframeAnalysis: aiAnalysis.timeframeAnalysis,
     };
 
     const ictAnalysis: ICTTradingAnalysis = {
@@ -251,6 +262,11 @@ tradingRouter.get("/ict/analyze", async (c) => {
           resistance: finalResistance,
           reasoning: aiAnalysis.supportResistance.reasoning,
         },
+        signalMethod: aiAnalysis.signalMethod,
+        predictedDirection: aiAnalysis.predictedDirection,
+        predictedConfidence: aiAnalysis.predictedConfidence,
+        predictedMethod: aiAnalysis.predictedMethod,
+        timeframeAnalysis: aiAnalysis.timeframeAnalysis,
       },
     });
   } catch (error) {

@@ -119,12 +119,17 @@ export interface ICTSignal {
     confirmations: string[];
     invalidations: string[];
   };
-  riskManagement: {
+  riskManagement?: {
     entry: number;
     stopLoss: number;
     takeProfit: number[];
     riskReward: number;
   };
+  signalMethod?: string;
+  predictedDirection?: 'LONG' | 'SHORT' | 'NEUTRAL';
+  predictedConfidence?: number;
+  predictedMethod?: string;
+  timeframeAnalysis?: string;
 }
 
 export interface MultiTimeframeAnalysis {

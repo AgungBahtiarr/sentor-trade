@@ -26,7 +26,7 @@ export const CONFIG = {
     model: "tngtech/deepseek-r1t2-chimera:free",
     temperature: 0.7,
     maxTokens: 1000,
-    minConfidenceForSignal: 70,
+    minConfidenceForSignal: 60,
   },
 };
 

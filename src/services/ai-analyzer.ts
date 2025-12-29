@@ -47,6 +47,11 @@ const ICTAnalysisSchema = z.object({
   levelReasoning: z.string(),
   riskConsiderations: z.string(),
   marketSummary: z.string(),
+  signalMethod: z.string().optional().describe("Trading method(s) for signal: e.g., 'OB Retest + Reversal', 'FVG Fill + Momentum'"),
+  predictedDirection: z.enum(["LONG", "SHORT", "NEUTRAL"]).optional().describe("Predicted direction to wait for when NO_SIGNAL"),
+  predictedConfidence: z.number().min(0).max(100).optional().describe("Confidence in prediction when NO_SIGNAL"),
+  predictedMethod: z.string().optional().describe("Predicted method(s) when NO_SIGNAL: e.g., 'Continuation + Pullback'"),
+  timeframeAnalysis: z.string().optional().describe("Timeframe analysis and recommendations"),
 });
 
 // ==================== TYPES ====================
@@ -245,28 +250,28 @@ export class AIAnalyzerService {
    - Neutral: Mixed signals or choppy price action
 
 2. **ENTRY CRITERIA** (ALL must align for BUY/SELL):
-   ✅ BUY Requirements:
-      - Bullish trend confirmed
-      - RSI: 30-70 (avoid overbought)
-      - MACD: Positive histogram + bullish crossover
-      - Price: Near support or breaking resistance with volume
-      - Recent candles: Higher lows pattern
-      - Confidence: Must be >75%
+    ✅ BUY Requirements:
+       - Bullish trend confirmed
+       - RSI: 30-70 (avoid overbought)
+       - MACD: Positive histogram + bullish crossover
+       - Price: Near support or breaking resistance with volume
+       - Recent candles: Higher lows pattern
+       - Confidence: Must be >65%
 
-   ✅ SELL Requirements:
-      - Bearish trend confirmed
-      - RSI: 30-70 (avoid oversold)
-      - MACD: Negative histogram + bearish crossover
-      - Price: Near resistance or breaking support with volume
-      - Recent candles: Lower highs pattern
-      - Confidence: Must be >75%
+    ✅ SELL Requirements:
+       - Bearish trend confirmed
+       - RSI: 30-70 (avoid oversold)
+       - MACD: Negative histogram + bearish crossover
+       - Price: Near resistance or breaking support with volume
+       - Recent candles: Lower highs pattern
+       - Confidence: Must be >65%
 
-3. **NO_SIGNAL Triggers** (Safety first):
-   - Conflicting indicators (e.g., bullish trend but bearish MACD)
-   - RSI in extreme zones (<30 or >70)
-   - Choppy/sideways price action
-   - Low confidence (<75%)
-   - Major S/R zone nearby without clear breakout
+ 3. **NO_SIGNAL Triggers** (Safety first):
+    - Conflicting indicators (e.g., bullish trend but bearish MACD)
+    - RSI in extreme zones (<30 or >70)
+    - Choppy/sideways price action
+    - Low confidence (<65%)
+    - Major S/R zone nearby without clear breakout
 
 **SUPPORT/RESISTANCE RULES:**
 - Support: Recent swing lows, EMA50, psychological levels
@@ -277,6 +282,7 @@ export class AIAnalyzerService {
 - Be specific with numbers and levels
 - Explain WHY, not just WHAT
 - Always consider risk-reward ratio
+- Add warnings for low confidence: If confidence 65-80%, include "⚠️ LOW CONFIDENCE: Higher risk, monitor closely"
 - Default to NO_SIGNAL when uncertain`;
 
       const userPrompt = `Analyze this market data:\n${this.buildMarketContext(marketData, indicators)}
@@ -384,28 +390,28 @@ export class AIAnalyzerService {
 - MACD: Secondary confirmation
 
 **ENTRY REQUIREMENTS:**
-✅ BUY Signal:
-   1. Market structure: BULLISH (HH + HL pattern)
-   2. One of: Bullish OB retest OR Bearish FVG fill
-   3. Liquidity: Recent sell-side sweep preferred
-   4. Confluence score: BULLISH > 3
-   5. Kill zone: Active (or very strong setup if not)
-   6. Confidence: >70%
+ ✅ BUY Signal:
+    1. Market structure: BULLISH (HH + HL pattern)
+    2. One of: Bullish OB retest OR Bearish FVG fill
+    3. Liquidity: Recent sell-side sweep preferred
+    4. Confluence score: BULLISH > 3
+    5. Kill zone: Active (or very strong setup if not)
+    6. Confidence: >60%
 
-✅ SELL Signal:
-   1. Market structure: BEARISH (LH + LL pattern)
-   2. One of: Bearish OB retest OR Bullish FVG fill
-   3. Liquidity: Recent buy-side sweep preferred
-   4. Confluence score: BEARISH > 3
-   5. Kill zone: Active (or very strong setup if not)
-   6. Confidence: >70%
+ ✅ SELL Signal:
+    1. Market structure: BEARISH (LH + LL pattern)
+    2. One of: Bearish OB retest OR Bullish FVG fill
+    3. Liquidity: Recent buy-side sweep preferred
+    4. Confluence score: BEARISH > 3
+    5. Kill zone: Active (or very strong setup if not)
+    6. Confidence: >60%
 
-🚫 NO_SIGNAL when:
-   - Market structure unclear/choppy
-   - No valid OB or FVG setup
-   - Outside kill zones with weak confluence
-   - Conflicting ICT signals
-   - Confidence <70%
+ 🚫 NO_SIGNAL when:
+    - Market structure unclear/choppy
+    - No valid OB or FVG setup
+    - Outside kill zones with weak confluence
+    - Conflicting ICT signals
+    - Confidence <60%
 
 **INVALIDATIONS (Setup is VOID if):**
 - Order Block violated (price closes through it)
@@ -417,7 +423,14 @@ export class AIAnalyzerService {
 - Specify exact ICT concepts triggering signal
 - Name the primary setup (e.g., "Bearish Breaker + FVG Confluence")
 - List 3+ confirmations
-- Define clear invalidation levels`;
+- Define clear invalidation levels
+- For signals: Identify trading method(s) - e.g., 'OB Retest + Reversal', 'FVG Fill + Momentum', 'Liquidity Sweep + Continuation', 'Market Structure Break + Breakout', etc.
+- For NO_SIGNAL: Predict direction (LONG/SHORT/NEUTRAL), confidence %, and method(s) - e.g., 'Continuation + Pullback', 'Reversal + Breakout'
+- Provide timeframe analysis: Explain which timeframes are optimal for monitoring (e.g., "Monitor 4h for trend, 1h for entries, 15m for timing")
+- Add warnings for low confidence signals: If confidence 60-75%, include "⚠️ LOW CONFIDENCE SIGNAL: Monitor closely, increased risk of invalidation"
+- If confidence 75-85%, include "⚡ MODERATE CONFIDENCE: Good setup but confirm with additional factors"
+- Ensure support/resistance levels provide favorable risk-reward ratio (minimum 1:2)
+- Always consider risk-reward ratio before recommending signal`;
 
       const userPrompt = `Perform deep ICT analysis on this market:\n${marketCtx}\n\n${ictCtx}
 
@@ -429,7 +442,10 @@ export class AIAnalyzerService {
 5. Calculate confluence score (bullish vs bearish)
 6. Validate ALL entry requirements
 7. Define setup invalidations
-8. Provide actionable signal with ICT-specific reasoning`;
+8. Identify trading method(s) for any signal found
+9. For NO_SIGNAL: Predict waiting direction with confidence and method(s)
+10. Provide timeframe analysis and recommendations
+11. Provide actionable signal with ICT-specific reasoning`;
 
       const output = await this.analyzeWithSchema<ICTSchemaOutput>(
         ICTAnalysisSchema,
@@ -457,6 +473,11 @@ export class AIAnalyzerService {
         marketSummary: output.marketSummary,
         ictSpecific: output.ictSpecific,
         setup: output.setup,
+        signalMethod: output.signalMethod,
+        predictedDirection: output.predictedDirection,
+        predictedConfidence: output.predictedConfidence,
+        predictedMethod: output.predictedMethod,
+        timeframeAnalysis: output.timeframeAnalysis,
       };
     } catch (error) {
       console.error("❌ ICT AI analysis error:", error);
