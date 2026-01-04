@@ -35,6 +35,7 @@ export interface TradingSignal {
   signal: 'BUY' | 'SELL' | 'NO_SIGNAL';
   confidence: number;
   reasoning: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 export interface TrendAnalysis {
