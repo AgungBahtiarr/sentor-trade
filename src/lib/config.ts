@@ -23,7 +23,7 @@ export const CONFIG = {
     },
   },
   ai: {
-    model: "google/gemini-2.5-flash-lite",
+    model: "nex-agi/deepseek-v3.1-nex-n1:free",
     temperature: 0.7,
     maxTokens: 1000,
     minConfidenceForSignal: 60,

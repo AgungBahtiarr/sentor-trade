@@ -2,21 +2,12 @@ import { Hono } from "hono";
 import { exchangeService } from "../services/exchange/exchange-provider";
 import { indicatorsService } from "../services/indicators";
 import { aiAnalyzerService } from "../services/ai-analyzer";
-import { ictService } from "../services/ict/ict-service";
-import { fvgService } from "../services/ict/fvg";
-import { orderBlockService } from "../services/ict/order-block";
-import { liquidityService } from "../services/ict/liquidity";
-import { marketStructureService } from "../services/ict/market-structure";
-import { timeAnalysisService } from "../services/ict/kill-zones";
+import { fractalService } from "../services/fractal";
 import type { TradingAnalysis } from "../types/trading";
-import type { ICTTradingAnalysis, ICTSignal } from "../types/ict";
 
 const tradingRouter = new Hono();
 
 // ==================== HELPER FUNCTIONS ====================
-/**
- * Calculate risk-reward ratio safely
- */
 function calculateRiskReward(
   entry: number,
   stopLoss: number,
@@ -29,90 +20,89 @@ function calculateRiskReward(
   return Number((reward / risk).toFixed(2));
 }
 
-/**
- * Determine optimal stop loss based on signal type and levels
- */
-function determineStopLoss(
-  signalType: string,
-  currentPrice: number,
-  support: number,
-  resistance: number,
-): number {
-  if (signalType === "BUY") {
-    // For BUY: Stop below support with buffer
-    return support > 0 ? support * 0.995 : currentPrice * 0.98;
-  } else if (signalType === "SELL") {
-    // For SELL: Stop above resistance with buffer
-    return resistance > 0 ? resistance * 1.005 : currentPrice * 1.02;
-  }
-  return currentPrice * 0.98; // Default 2% stop
-}
+// ==================== TIMEFRAME MAPPING ====================
+const TIMEFRAME_MAPPING = {
+  "1m": { structure: "5m", bias: "1h" },
+  "3m": { structure: "15m", bias: "1h" },
+  "5m": { structure: "15m", bias: "1h" },
+  "15m": { structure: "1h", bias: "1d" },
+  "30m": { structure: "4h", bias: "1d" },
+  "1h": { structure: "4h", bias: "1d" },
+  "4h": { structure: "1d", bias: "1w" },
+  "1d": { structure: "1w", bias: "1M" },
+} as const;
 
-/**
- * Calculate multiple take profit levels with improved risk-reward ratios
- */
-function calculateTakeProfits(
-  signalType: string,
-  entry: number,
-  stopLoss: number,
-  resistance: number,
-  support: number,
-): number[] {
-  const risk = Math.abs(entry - stopLoss);
+type TimeframeKey = keyof typeof TIMEFRAME_MAPPING;
 
-  if (signalType === "BUY") {
-    return [
-      entry + risk * 2, // TP1: 2R (minimum 1:2 RR)
-      entry + risk * 3, // TP2: 3R
-      resistance > entry ? resistance : entry + risk * 5, // TP3: Resistance or 5R
-    ];
-  } else if (signalType === "SELL") {
-    return [
-      entry - risk * 2, // TP1: 2R (minimum 1:2 RR)
-      entry - risk * 3, // TP2: 3R
-      support > 0 && support < entry ? support : entry - risk * 5, // TP3: Support or 5R
-    ];
-  }
-
-  return [entry * 1.02, entry * 1.04, entry * 1.06]; // Default
-}
-
-// ==================== STANDARD ANALYSIS ENDPOINT ====================
+// ==================== FRACTAL ANALYSIS ENDPOINT ====================
 tradingRouter.get("/analyze", async (c) => {
   try {
     const symbol = c.req.query("symbol") || "BTCUSDT";
-    const timeframe = c.req.query("timeframe") || "15m";
-    console.log("📊 Standard Analysis:", { symbol, timeframe });
+    let entryTimeframe = c.req.query("timeframe") || "5m";
 
-    // Fetch market data and calculate indicators
-    const marketData = await exchangeService.getMarketData(symbol, timeframe);
-    const indicators = indicatorsService.calculateAllIndicators(
-      marketData.candles,
-    );
-    const supportResistance = indicatorsService.analyzeSupportResistance(
-      marketData.candles,
+    if (!(entryTimeframe in TIMEFRAME_MAPPING)) {
+      console.warn(`⚠️ Unknown timeframe ${entryTimeframe}, defaulting to 15m`);
+      entryTimeframe = "15m";
+    }
+
+    const mapping = TIMEFRAME_MAPPING[entryTimeframe as TimeframeKey];
+    const structureTimeframe = mapping.structure;
+    const biasTimeframe = mapping.bias;
+
+    console.log("🔮 Fractal Analysis:", { symbol, entryTimeframe, structureTimeframe, biasTimeframe });
+
+    const [
+      biasMarketData,
+      structureMarketData,
+      entryMarketData,
+    ] = await Promise.all([
+      exchangeService.getMarketData(symbol, biasTimeframe),
+      exchangeService.getMarketData(symbol, structureTimeframe),
+      exchangeService.getMarketData(symbol, entryTimeframe),
+    ]);
+
+    const indicators = indicatorsService.calculateAllIndicators(entryMarketData.candles);
+
+    const fractalData = fractalService.analyzeFractal(
+      biasMarketData.candles,
+      structureMarketData.candles,
+      entryMarketData.candles,
     );
 
-    // AI Analysis with optimized prompts
-    const aiAnalysis = await aiAnalyzerService.analyzeMarket(
-      marketData,
+    const aiAnalysis = await aiAnalyzerService.analyzeFractalMarket(
+      entryMarketData,
       indicators,
+      fractalData,
     );
+
+    if (aiAnalysis.setupPhase !== "READY_TO_ENTER") {
+      console.log(`⏳ Setup phase is ${aiAnalysis.setupPhase}, forcing NO_SIGNAL`);
+      aiAnalysis.signal.signal = "NO_SIGNAL";
+      aiAnalysis.signal.reasoning += ` Setup phase is ${aiAnalysis.setupPhase}, waiting for READY_TO_ENTER.`;
+    }
 
     const analysis: TradingAnalysis = {
-      marketData,
+      marketData: entryMarketData,
       indicators,
       signal: aiAnalysis.signal,
-      trend: aiAnalysis.trend,
+      trend: {
+        trend: fractalData.dailyBias.type.includes("BULLISH")
+          ? "BULLISH"
+          : fractalData.dailyBias.type.includes("BEARISH")
+          ? "BEARISH"
+          : "NEUTRAL",
+        strength: "MODERATE",
+        description: fractalData.dailyBias.description,
+      },
       supportResistance: {
-        support: supportResistance.support,
-        resistance: supportResistance.resistance,
-        nearestSupport:
-          aiAnalysis.supportResistance.supportLevel ||
-          supportResistance.nearestSupport,
-        nearestResistance:
-          aiAnalysis.supportResistance.resistanceLevel ||
-          supportResistance.nearestResistance,
+        support: [fractalData.dailyBias.previousDay.low],
+        resistance: [fractalData.dailyBias.previousDay.high],
+        nearestSupport: fractalData.pois
+          .filter((poi) => poi.price < entryMarketData.currentPrice)
+          .sort((a, b) => b.price - a.price)[0]?.price || 0,
+        nearestResistance: fractalData.pois
+          .filter((poi) => poi.price > entryMarketData.currentPrice)
+          .sort((a, b) => a.price - b.price)[0]?.price || 0,
       },
       timestamp: Date.now(),
     };
@@ -121,353 +111,46 @@ tradingRouter.get("/analyze", async (c) => {
       success: true,
       data: analysis,
       meta: {
-        aiReasoning: aiAnalysis.signal.reasoning,
+        mode: "fractal",
+        timeframes: {
+          bias: biasTimeframe,
+          structure: structureTimeframe,
+          entry: entryTimeframe,
+        },
+        fractalData: {
+          dailyBias: fractalData.dailyBias,
+          poi: fractalData.pois.slice(0, 5),
+          cisds: fractalData.cisds.slice(-3),
+        },
+        biasAnalysis: aiAnalysis.biasAnalysis,
+        poiIdentified: aiAnalysis.poiIdentified,
+        structureValidation: aiAnalysis.structureValidation,
+        setupConfirmation: aiAnalysis.setupConfirmation,
+        setupPhase: aiAnalysis.setupPhase,
+        tradeParameters:
+          aiAnalysis.signal.signal === "BUY" || aiAnalysis.signal.signal === "SELL"
+            ? {
+                entryZone: aiAnalysis.entryZone,
+                stopLoss: aiAnalysis.stopLoss,
+                takeProfit: aiAnalysis.takeProfit,
+                riskReward: calculateRiskReward(
+                  aiAnalysis.entryZone,
+                  aiAnalysis.stopLoss,
+                  aiAnalysis.takeProfit,
+                ),
+              }
+            : undefined,
         riskConsiderations: aiAnalysis.riskConsiderations,
         marketSummary: aiAnalysis.marketSummary,
       },
     });
   } catch (error) {
-    console.error("❌ Standard analysis error:", error);
+    console.error("❌ Fractal analysis error:", error);
     return c.json(
       {
         success: false,
         error:
           error instanceof Error ? error.message : "Failed to analyze market",
-      },
-      500,
-    );
-  }
-});
-
-// ==================== FIGHTER ANALYSIS ENDPOINT ====================
-tradingRouter.get("/fighter/analyze", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const timeframe = c.req.query("timeframe") || "5m";
-    console.log("⚡ Fighter Analysis (Scalping):", { symbol, timeframe });
-
-    // Fetch market data and calculate indicators
-    const marketData = await exchangeService.getMarketData(symbol, timeframe);
-    const indicators = indicatorsService.calculateAllIndicators(
-      marketData.candles,
-    );
-    const supportResistance = indicatorsService.analyzeSupportResistance(
-      marketData.candles,
-    );
-
-    // AI Analysis with fighter prompts optimized for scalping
-    const aiAnalysis = await aiAnalyzerService.analyzeFighterMarket(
-      marketData,
-      indicators,
-    );
-
-    // Conditionally calculate risk management for actionable signals (scalping style)
-    let riskManagement;
-    if (aiAnalysis.signal.signal === 'BUY' || aiAnalysis.signal.signal === 'SELL') {
-      // Calculate optimal stop loss for scalping (tighter)
-      const stopLoss = determineStopLoss(
-        aiAnalysis.signal.signal,
-        marketData.currentPrice,
-        aiAnalysis.supportResistance.supportLevel,
-        aiAnalysis.supportResistance.resistanceLevel,
-      );
-
-      // Calculate multiple take profit levels for scalping (1:1 to 1:2 RR)
-      const takeProfits = calculateTakeProfits(
-        aiAnalysis.signal.signal,
-        marketData.currentPrice,
-        stopLoss,
-        aiAnalysis.supportResistance.resistanceLevel,
-        aiAnalysis.supportResistance.supportLevel,
-      );
-
-      // Calculate risk-reward for first TP
-      const riskReward = calculateRiskReward(
-        marketData.currentPrice,
-        stopLoss,
-        takeProfits[0],
-      );
-
-      riskManagement = {
-        entry: marketData.currentPrice,
-        stopLoss: stopLoss,
-        takeProfit: takeProfits,
-        riskReward: riskReward,
-      };
-    }
-
-    const analysis: TradingAnalysis = {
-      marketData,
-      indicators,
-      signal: aiAnalysis.signal,
-      trend: aiAnalysis.trend,
-      supportResistance: {
-        support: supportResistance.support,
-        resistance: supportResistance.resistance,
-        nearestSupport:
-          aiAnalysis.supportResistance.supportLevel ||
-          supportResistance.nearestSupport,
-        nearestResistance:
-          aiAnalysis.supportResistance.resistanceLevel ||
-          supportResistance.nearestResistance,
-      },
-      timestamp: Date.now(),
-    };
-
-    return c.json({
-      success: true,
-      data: analysis,
-      meta: {
-        mode: "fighter",
-        scalpingTimeframe: aiAnalysis.scalpingTimeframe,
-        aiReasoning: aiAnalysis.signal.reasoning,
-        riskConsiderations: aiAnalysis.riskConsiderations,
-        marketSummary: aiAnalysis.marketSummary,
-        riskManagement,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Fighter analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to analyze market",
-      },
-      500,
-    );
-  }
-});
-
-// ==================== ICT ANALYSIS ENDPOINT (OPTIMIZED) ====================
-tradingRouter.get("/ict/analyze", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const primaryTimeframe = c.req.query("timeframe") || "15m";
-    const higherTimeframe = c.req.query("higherTimeframe") || "4h";
-    console.log("🔥 ICT Analysis:", {
-      symbol,
-      primaryTimeframe,
-      higherTimeframe,
-    });
-
-    // Perform ICT analysis
-    const ictResult = await ictService.analyzeICT(
-      symbol,
-      primaryTimeframe,
-      higherTimeframe,
-    );
-    if (!ictResult || !ictResult.ictAnalysis) {
-      throw new Error("Failed to perform ICT analysis");
-    }
-
-    // Get market data and indicators
-    const marketData = await exchangeService.getMarketData(
-      symbol,
-      primaryTimeframe,
-    );
-    const indicators = indicatorsService.calculateAllIndicators(
-      marketData.candles,
-    );
-    const supportResistance = indicatorsService.analyzeSupportResistance(
-      marketData.candles,
-    );
-
-    // AI Analysis with ICT-specific optimized prompts
-    const aiAnalysis = await aiAnalyzerService.analyzeICTMarket(
-      marketData,
-      indicators,
-      ictResult.ictAnalysis,
-    );
-
-    // Use AI-provided support/resistance levels (more accurate)
-    const finalSupport = aiAnalysis.supportResistance.supportLevel;
-    const finalResistance = aiAnalysis.supportResistance.resistanceLevel;
-
-    // Conditionally calculate risk management only for actionable signals
-    let riskManagement;
-    if (aiAnalysis.signal.signal === 'BUY' || aiAnalysis.signal.signal === 'SELL') {
-      // Calculate optimal stop loss
-      const stopLoss = determineStopLoss(
-        aiAnalysis.signal.signal,
-        marketData.currentPrice,
-        finalSupport,
-        finalResistance,
-      );
-
-      // Calculate multiple take profit levels
-      const takeProfits = calculateTakeProfits(
-        aiAnalysis.signal.signal,
-        marketData.currentPrice,
-        stopLoss,
-        finalResistance,
-        finalSupport,
-      );
-
-      // Calculate risk-reward for first TP
-      const riskReward = calculateRiskReward(
-        marketData.currentPrice,
-        stopLoss,
-        takeProfits[0],
-      );
-
-      riskManagement = {
-        entry: marketData.currentPrice,
-        stopLoss: stopLoss,
-        takeProfit: takeProfits,
-        riskReward: riskReward,
-      };
-    }
-
-    const signal: ICTSignal = {
-      type: aiAnalysis.signal.signal,
-      ictSpecific: aiAnalysis.ictSpecific,
-      confidence: aiAnalysis.signal.confidence,
-      reasoning: aiAnalysis.signal.reasoning,
-      setup: aiAnalysis.setup,
-      riskManagement,
-      signalMethod: aiAnalysis.signalMethod,
-      predictedDirection: aiAnalysis.predictedDirection,
-      predictedConfidence: aiAnalysis.predictedConfidence,
-      predictedMethod: aiAnalysis.predictedMethod,
-      timeframeAnalysis: aiAnalysis.timeframeAnalysis,
-    };
-
-    const ictAnalysis: ICTTradingAnalysis = {
-      primaryTimeframe: ictResult.primaryTimeframe,
-      higherTimeframe: ictResult.higherTimeframe,
-      signal,
-      ictAnalysis: ictResult.ictAnalysis,
-      secondaryIndicators: indicators,
-      marketData: {
-        symbol: marketData.symbol,
-        timeframe: primaryTimeframe,
-        currentPrice: marketData.currentPrice,
-        priceChangePercent: marketData.priceChangePercent,
-      },
-      timestamp: Date.now(),
-    };
-
-    return c.json({
-      success: true,
-      data: ictAnalysis,
-      meta: {
-        aiReasoning: aiAnalysis.signal.reasoning,
-        ictSpecific: aiAnalysis.ictSpecific,
-        setupDetails: aiAnalysis.setup,
-        riskConsiderations: aiAnalysis.riskConsiderations,
-        marketSummary: aiAnalysis.marketSummary,
-        supportResistanceLevels: {
-          support: finalSupport,
-          resistance: finalResistance,
-          reasoning: aiAnalysis.supportResistance.reasoning,
-        },
-        signalMethod: aiAnalysis.signalMethod,
-        predictedDirection: aiAnalysis.predictedDirection,
-        predictedConfidence: aiAnalysis.predictedConfidence,
-        predictedMethod: aiAnalysis.predictedMethod,
-        timeframeAnalysis: aiAnalysis.timeframeAnalysis,
-      },
-    });
-  } catch (error) {
-    console.error("❌ ICT analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to perform ICT analysis",
-      },
-      500,
-    );
-  }
-});
-
-// ==================== COMBINED ANALYSIS ====================
-tradingRouter.get("/analyze/both", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const primaryTimeframe = c.req.query("timeframe") || "15m";
-    const higherTimeframe = c.req.query("higherTimeframe") || "4h";
-    console.log("🔄 Combined Analysis:", {
-      symbol,
-      primaryTimeframe,
-      higherTimeframe,
-    });
-
-    // Get market data
-    const marketData = await exchangeService.getMarketData(
-      symbol,
-      primaryTimeframe,
-    );
-    const indicators = indicatorsService.calculateAllIndicators(
-      marketData.candles,
-    );
-
-    // Get ICT analysis
-    const ictResult = await ictService.analyzeICT(
-      symbol,
-      primaryTimeframe,
-      higherTimeframe,
-    );
-    if (!ictResult || !ictResult.ictAnalysis) {
-      throw new Error("Failed to perform ICT analysis");
-    }
-
-    // Run both analyses in parallel (faster!)
-    const { standard, ict } = await aiAnalyzerService.analyzeMarketBoth(
-      marketData,
-      indicators,
-      ictResult.ictAnalysis,
-    );
-
-    return c.json({
-      success: true,
-      data: {
-        symbol,
-        timeframe: primaryTimeframe,
-        higherTimeframe,
-        currentPrice: marketData.currentPrice,
-        standardAnalysis: {
-          signal: standard.signal,
-          trend: standard.trend,
-          supportResistance: standard.supportResistance,
-          summary: standard.marketSummary,
-        },
-        ictAnalysis: {
-          signal: ict.signal,
-          ictSpecific: ict.ictSpecific,
-          setup: ict.setup,
-          trend: ict.trend,
-          supportResistance: ict.supportResistance,
-          summary: ict.marketSummary,
-        },
-        consensus: {
-          // If both agree on BUY/SELL, it's a strong signal
-          agree: standard.signal.signal === ict.signal.signal,
-          strongerSignal:
-            standard.signal.confidence > ict.signal.confidence
-              ? "standard"
-              : "ict",
-          recommendation:
-            standard.signal.signal === ict.signal.signal &&
-            standard.signal.signal !== "NO_SIGNAL"
-              ? `STRONG ${standard.signal.signal}`
-              : "WAIT_FOR_CLARITY",
-        },
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Combined analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to perform combined analysis",
       },
       500,
     );
@@ -537,176 +220,6 @@ tradingRouter.get("/price", async (c) => {
       500,
     );
   }
-});
-
-// ==================== ICT SUB-ENDPOINTS ====================
-tradingRouter.get("/ict/fvg", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const timeframe = c.req.query("timeframe") || "15m";
-
-    const candles = await exchangeService.fetchCandles(symbol, timeframe);
-    const fvgs = fvgService.detectFairValueGaps(candles);
-    const activeFVGs = fvgService.getActiveFVGs(fvgs);
-
-    return c.json({
-      success: true,
-      data: {
-        symbol,
-        timeframe,
-        allFVGs: fvgs,
-        activeFVGs,
-        nearestFVG: fvgService.getNearestFVG(
-          fvgs,
-          candles[candles.length - 1].close,
-        ),
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ FVG analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to analyze FVG",
-      },
-      500,
-    );
-  }
-});
-
-tradingRouter.get("/ict/orderblocks", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const timeframe = c.req.query("timeframe") || "15m";
-
-    const candles = await exchangeService.fetchCandles(symbol, timeframe);
-    const orderBlocks = orderBlockService.detectOrderBlocks(candles);
-    const activeOBs = orderBlockService.getActiveOrderBlocks(orderBlocks);
-
-    return c.json({
-      success: true,
-      data: {
-        symbol,
-        timeframe,
-        allOrderBlocks: orderBlocks,
-        activeOrderBlocks: activeOBs,
-        nearestOrderBlock: orderBlockService.getNearestOrderBlock(
-          orderBlocks,
-          candles[candles.length - 1].close,
-        ),
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Order blocks analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to analyze order blocks",
-      },
-      500,
-    );
-  }
-});
-
-tradingRouter.get("/ict/liquidity", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const timeframe = c.req.query("timeframe") || "15m";
-
-    const candles = await exchangeService.fetchCandles(symbol, timeframe);
-    const liquidity = liquidityService.analyzeLiquidity(candles);
-
-    return c.json({
-      success: true,
-      data: {
-        symbol,
-        timeframe,
-        liquidity,
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Liquidity analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to analyze liquidity",
-      },
-      500,
-    );
-  }
-});
-
-tradingRouter.get("/ict/structure", async (c) => {
-  try {
-    const symbol = c.req.query("symbol") || "BTCUSDT";
-    const timeframe = c.req.query("timeframe") || "15m";
-
-    const candles = await exchangeService.fetchCandles(symbol, timeframe);
-    const structure = marketStructureService.analyzeMarketStructure(candles);
-
-    return c.json({
-      success: true,
-      data: {
-        symbol,
-        timeframe,
-        structure,
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Market structure analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to analyze market structure",
-      },
-      500,
-    );
-  }
-});
-
-tradingRouter.get("/ict/time", async (c) => {
-  try {
-    const timeAnalysis = timeAnalysisService.analyzeTime();
-    const optimalTrading = timeAnalysisService.isOptimalTradingTime();
-    const nextKillZone = timeAnalysisService.getNextKillZone();
-
-    return c.json({
-      success: true,
-      data: {
-        timeAnalysis,
-        optimalTrading,
-        nextKillZone,
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Time analysis error:", error);
-    return c.json(
-      {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to analyze time",
-      },
-      500,
-    );
-  }
-});
-
-tradingRouter.get("/ict/killzones", async (c) => {
-  return c.redirect("/api/trading/ict/time");
 });
 
 // ==================== HEALTH CHECK ====================

@@ -8,97 +8,39 @@ import type {
   TradingSignal,
   TrendAnalysis,
 } from "../types/trading";
-import type { ICTAnalysis } from "../types/ict";
+import type { FractalData } from "./fractal";
 
-// ==================== SCHEMAS ====================
-const StandardAnalysisSchema = z.object({
+const FractalAnalysisSchema = z.object({
   signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]).describe("The trading decision"),
   confidence: z.number().min(0).max(100).describe("Confidence score 0-100%"),
   signalReasoning: z.string().describe("Explanation for the signal decision"),
-  trend: z.enum(["BULLISH", "BEARISH", "NEUTRAL"]),
-  trendStrength: z.enum(["STRONG", "MODERATE", "WEAK"]),
-  trendDescription: z.string().describe("Context about the trend"),
-  supportLevel: z.number().describe("Nearest key support price"),
-  resistanceLevel: z.number().describe("Nearest key resistance price"),
-  levelReasoning: z.string().describe("Why these levels matter"),
+  biasAnalysis: z.string().describe("Daily bias analysis and interpretation"),
+  poiIdentified: z.string().describe("Point of Interest identified and why it matters"),
+  structureValidation: z.string().describe("Validation of structure and timeframe alignment"),
+  setupConfirmation: z.string().describe("Confirmation of Continuation Order Block setup"),
+  setupPhase: z.enum(["WAITING_FOR_SWEEP", "WAITING_FOR_CLOSE", "READY_TO_ENTER"]).describe("Current phase of the setup"),
+  entryZone: z.number().describe("Recommended entry price zone"),
+  stopLoss: z.number().describe("Stop loss price level"),
+  takeProfit: z.number().describe("Take profit price level"),
   riskConsiderations: z.string().describe("Risk factors to watch"),
   marketSummary: z.string().describe("Brief market overview"),
 });
 
-const ICTAnalysisSchema = z.object({
-  signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]),
-  confidence: z.number().min(0).max(100),
-  reasoning: z.string(),
-  ictSpecific: z
-    .string()
-    .describe("Specific ICT context e.g. 'OB Retest + FVG'"),
-  setup: z.object({
-    primary: z.string().describe("Main setup driver e.g. 'Bearish Breaker'"),
-    confirmations: z.array(z.string()).describe("List of supporting factors"),
-    invalidations: z
-      .array(z.string())
-      .describe("Factors that invalidate setup"),
-  }),
-  trend: z.enum(["BULLISH", "BEARISH", "NEUTRAL"]),
-  trendStrength: z.enum(["STRONG", "MODERATE", "WEAK"]),
-  trendDescription: z.string(),
-  supportLevel: z.number(),
-  resistanceLevel: z.number(),
-  levelReasoning: z.string(),
-  riskConsiderations: z.string(),
-  marketSummary: z.string(),
-  signalMethod: z.string().optional().describe("Trading method(s) for signal: e.g., 'OB Retest + Reversal', 'FVG Fill + Momentum'"),
-  predictedDirection: z.enum(["LONG", "SHORT", "NEUTRAL"]).optional().describe("Predicted direction to wait for when NO_SIGNAL"),
-  predictedConfidence: z.number().min(0).max(100).optional().describe("Confidence in prediction when NO_SIGNAL"),
-  predictedMethod: z.string().optional().describe("Predicted method(s) when NO_SIGNAL: e.g., 'Continuation + Pullback'"),
-  timeframeAnalysis: z.string().optional().describe("Timeframe analysis and recommendations"),
-});
-
-const FighterAnalysisSchema = z.object({
-  signal: z.enum(["BUY", "SELL", "NO_SIGNAL"]).describe("The trading decision"),
-  confidence: z.number().min(0).max(100).describe("Confidence score 0-100%"),
-  signalReasoning: z.string().describe("Explanation for the signal decision"),
-  trend: z.enum(["BULLISH", "BEARISH", "NEUTRAL"]),
-  trendStrength: z.enum(["STRONG", "MODERATE", "WEAK"]),
-  trendDescription: z.string().describe("Context about the trend"),
-  supportLevel: z.number().describe("Nearest key support price"),
-  resistanceLevel: z.number().describe("Nearest key resistance price"),
-  levelReasoning: z.string().describe("Why these levels matter"),
-  riskConsiderations: z.string().describe("Risk factors to watch"),
-  marketSummary: z.string().describe("Brief market overview"),
-  scalpingTimeframe: z.string().optional().describe("Optimal timeframe for scalping this signal"),
-});
-
-// ==================== TYPES ====================
-type AnalysisResult = {
+type FractalAnalysisResult = {
   signal: TradingSignal;
-  trend: TrendAnalysis;
-  supportResistance: {
-    supportLevel: number;
-    resistanceLevel: number;
-    reasoning: string;
-  };
+  biasAnalysis: string;
+  poiIdentified: string;
+  structureValidation: string;
+  setupConfirmation: string;
+  setupPhase: 'WAITING_FOR_SWEEP' | 'WAITING_FOR_CLOSE' | 'READY_TO_ENTER';
+  entryZone: number;
+  stopLoss: number;
+  takeProfit: number;
   riskConsiderations: string;
   marketSummary: string;
 };
 
-type ICTAnalysisResult = AnalysisResult & {
-  ictSpecific: string;
-  setup: {
-    primary: string;
-    confirmations: string[];
-    invalidations: string[];
-  };
-};
-
-type FighterAnalysisResult = AnalysisResult & {
-  scalpingTimeframe?: string;
-};
-
-type StandardSchemaOutput = z.infer<typeof StandardAnalysisSchema>;
-type ICTSchemaOutput = z.infer<typeof ICTAnalysisSchema>;
-type FighterSchemaOutput = z.infer<typeof FighterAnalysisSchema>;
-type FighterSchemaOutput = z.infer<typeof FighterAnalysisSchema>;
+type FractalSchemaOutput = z.infer<typeof FractalAnalysisSchema>;
 
 // ==================== SERVICE ====================
 export class AIAnalyzerService {
@@ -172,33 +114,6 @@ export class AIAnalyzerService {
     ].join("\n");
   }
 
-  private buildICTContext(ictAnalysis: ICTAnalysis): string {
-    const {
-      fairValueGaps,
-      orderBlocks,
-      liquidity,
-      marketStructure,
-      timeAnalysis,
-      confluence,
-    } = ictAnalysis;
-
-    const activeFVGs = fairValueGaps.filter((f) => !f.filled).slice(0, 3);
-    const activeOBs = orderBlocks.filter((ob) => ob.active).slice(0, 3);
-
-    return [
-      "ICT STRUCTURE CONTEXT:",
-      `- Structure: ${marketStructure.trend} (${marketStructure.currentStructure.phase})`,
-      `- Kill Zone: ${timeAnalysis.killZone.active ? "ACTIVE" : "INACTIVE"} (${timeAnalysis.session})`,
-      `- Confluence Score: Bull ${confluence.bullishScore} / Bear ${confluence.bearishScore}`,
-      "",
-      "KEY ARRAYS:",
-      `- FVGs: ${activeFVGs.map((f) => `${f.type} @ ${f.mid}`).join(", ") || "None"}`,
-      `- Order Blocks: ${activeOBs.map((ob) => `${ob.type} @ ${ob.close}`).join(", ") || "None"}`,
-      `- Liquidity: Swept Buy(${liquidity.totalBuySideSwept}) / Sell(${liquidity.totalSellSideSwept})`,
-    ].join("\n");
-  }
-
-  // ==================== SHARED ANALYSIS METHOD ====================
   private async analyzeWithSchema<
     T extends { signal: string; confidence: number },
   >(
@@ -230,356 +145,131 @@ export class AIAnalyzerService {
     return output;
   }
 
-  // ==================== FALLBACK GENERATOR ====================
-  private createFallbackResult(
+  private buildFractalContext(
     marketData: MarketData,
-    errorMessage: string,
-  ): AnalysisResult {
-    return {
-      signal: {
-        signal: "NO_SIGNAL",
-        confidence: 0,
-        reasoning: `Analysis failed: ${errorMessage}`,
-      },
-      trend: {
-        trend: "NEUTRAL",
-        strength: "WEAK",
-        description: "Error occurred during analysis",
-      },
-      supportResistance: {
-        supportLevel: marketData.currentPrice * 0.95,
-        resistanceLevel: marketData.currentPrice * 1.05,
-        reasoning: "Fallback levels due to analysis error",
-      },
-      riskConsiderations: "⚠️ System error - avoid trading until resolved",
-      marketSummary: `Analysis Error: ${errorMessage}`,
-    };
+    fractalData: FractalData,
+  ): string {
+    const { symbol, timeframe, currentPrice, candles } = marketData;
+    const { dailyBias, swingPoints, pois, cisds } = fractalData;
+
+    const recentCandles = candles.slice(-5);
+    const recentPOIs = pois.slice(0, 3);
+    const recentCISDs = cisds.slice(-3);
+    const currentTime = new Date().toISOString();
+    const currentHour = new Date().getUTCHours();
+
+    return [
+      "FRACTAL MARKET CONTEXT:",
+      `Symbol: ${symbol} (${timeframe})`,
+      `Price: ${currentPrice}`,
+      `Current Time: ${currentTime} (UTC ${currentHour}:00)`,
+      "",
+      "DAILY BIAS:",
+      `Type: ${dailyBias.type}`,
+      `Description: ${dailyBias.description}`,
+      `Previous Day: H=${dailyBias.previousDay.high} L=${dailyBias.previousDay.low} C=${dailyBias.previousDay.close}`,
+      `Current Day: H=${dailyBias.currentDay.high} L=${dailyBias.currentDay.low} C=${dailyBias.currentDay.close}`,
+      "",
+      "POINTS OF INTEREST (POI):",
+      ...recentPOIs.map(
+        (poi) => `- ${poi.type}: ${poi.price.toFixed(4)} (${poi.strength} strength)`,
+      ),
+      "",
+      "SWING POINTS:",
+      ...swingPoints.slice(-5).map(
+        (sp) => `- ${sp.type}: ${sp.price.toFixed(4)}`,
+      ),
+      "",
+      "CHANGE IN STATE DELIVERY (CISD):",
+      ...recentCISDs.map(
+        (cisd) => `- ${cisd.type}: ${cisd.description}`,
+      ),
+      "",
+      "RECENT PRICE ACTION:",
+      ...recentCandles.map(
+        (c, i) =>
+          `Candle ${i + 1}: O=${c.open}, H=${c.high}, L=${c.low}, C=${c.close}`,
+      ),
+    ].join("\n");
   }
 
-  // ==================== STANDARD ANALYSIS ====================
-  async analyzeMarket(
+  async analyzeFractalMarket(
     marketData: MarketData,
     indicators: TechnicalIndicators,
-  ): Promise<AnalysisResult> {
+    fractalData: FractalData,
+  ): Promise<FractalAnalysisResult> {
     try {
-      const systemPrompt = `You are an elite Crypto Futures Trader with 10+ years experience. Your analysis must be PRECISE and ACTIONABLE.
+      const systemPrompt = `# ROLE
+Bertindaklah sebagai Ahli Analisa Teknikal yang berspesialisasi dalam "Fractal Model" dari TTrades. Tugasmu adalah menganalisa grafik harga menggunakan pendekatan top-down (dari timeframe besar ke kecil) untuk menemukan setup trading dengan probabilitas tinggi.
 
-**DECISION FRAMEWORK:**
-1. **TREND FIRST** - Never trade against the dominant trend
-   - Bullish: Price above EMA50 + Rising EMA9/21 + RSI > 50
-   - Bearish: Price below EMA50 + Falling EMA9/21 + RSI < 50
-   - Neutral: Mixed signals or choppy price action
+# KONSEP INTI
+Harga bergerak dalam fraktal. Harga tidak bisa berbalik arah (reverse) tanpa membentuk Swing Point. Kamu harus mencari penyelarasan (alignment) antara Bias Timeframe Besar, Struktur Timeframe Menengah, dan Eksekusi Timeframe Kecil.
 
-2. **ENTRY CRITERIA** (ALL must align for BUY/SELL):
-    ✅ BUY Requirements:
-       - Bullish trend confirmed
-       - RSI: 30-70 (avoid overbought)
-       - MACD: Positive histogram + bullish crossover
-       - Price: Near support or breaking resistance with volume
-       - Recent candles: Higher lows pattern
-       - Confidence: Must be >65%
+# ATURAN ANALISA (STEP-BY-STEP)
 
-    ✅ SELL Requirements:
-       - Bearish trend confirmed
-       - RSI: 30-70 (avoid oversold)
-       - MACD: Negative histogram + bearish crossover
-       - Price: Near resistance or breaking support with volume
-       - Recent candles: Lower highs pattern
-       - Confidence: Must be >65%
+## LANGKAH 1: Tentukan Bias Harian (Daily Bias)
+Analisa candle penutupan hari sebelumnya (Previous Day Close) relatif terhadap rentang hari sebelumnya (Previous Day Range):
+1. **Bullish Continuation:** Harga ditutup DI ATAS High hari sebelumnya. (Ekspektasi: Lanjut naik).
+2. **Bearish Continuation:** Harga ditutup DI BAWAH Low hari sebelumnya. (Ekspektasi: Lanjut turun).
+3. **Bullish Reversal:** Harga menyapu (sweep) Low hari sebelumnya, tapi DITUTUP KEMBALI di dalam range (di atas Low tersebut).
+4. **Bearish Reversal:** Harga menyapu (sweep) High hari sebelumnya, tapi DITUTUP KEMBALI di dalam range (di bawah High tersebut).
 
- 3. **NO_SIGNAL Triggers** (Safety first):
-    - Conflicting indicators (e.g., bullish trend but bearish MACD)
-    - RSI in extreme zones (<30 or >70)
-    - Choppy/sideways price action
-    - Low confidence (<65%)
-    - Major S/R zone nearby without clear breakout
+## LANGKAH 2: Identifikasi Point of Interest (POI)
+Pada timeframe menengah (misal: H1 jika bias Daily), identifikasi area di mana harga kemungkinan bereaksi:
+- Fair Value Gaps (FVG).
+- Old Swing Highs/Lows.
+- Order Blocks.
+*Tunggu harga masuk ke POI ini sebelum mencari konfirmasi.*
 
-**SUPPORT/RESISTANCE RULES:**
-- Support: Recent swing lows, EMA50, psychological levels
-- Resistance: Recent swing highs, previous breakout points
-- Must be within 5% of current price to be relevant
+## LANGKAH 3: Konfirmasi Struktur & Timeframe Alignment
+Gunakan pasangan timeframe berikut:
+- Monthly (Bias) -> Daily (Struktur) -> Hourly (Entry)
+- Daily (Bias) -> Hourly (Struktur) -> 5-Minute (Entry)
+- 4-Hour (Bias) -> 15-Minute (Struktur) -> 1-Minute (Entry)
+
+Cari "Change in State of Delivery" (CISD) pada timeframe struktur setelah POI tersentuh.
+
+## LANGKAH 4: Pola Entri (The Setup)
+JANGAN masuk hanya karena struktur berubah. Cari pola spesifik "CONTINUATION ORDER BLOCK" pada timeframe eksekusi (Entry Timeframe):
+1. **Sweep:** Harga harus mengambil likuiditas internal (menyapu high/low jangka pendek).
+2. **Displacement:** Setelah sweep, harga harus berbalik dan DITUTUP (Close) melewati serangkaian candle yang berlawanan.
+   - *Bullish Entry:* Sweep Low -> Close kuat di atas candle bearish terakhir.
+   - *Bearish Entry:* Sweep High -> Close kuat di bawah candle bullish terakhir.
+3. **Entry Trigger:** Masuk saat candle close tersebut atau saat retest ke area sapuan likuiditas (sweep area).
+
+## LANGKAH 5: Manajemen Risiko
+- **Stop Loss:** Di tempatkan di atas/bawah "Protected High/Low" (Swing point yang baru terbentuk setelah sweep).
+- **Take Profit:** Targetkan likuiditas eksternal (Previous Day High/Low) atau FVG di timeframe besar. Pastikan TP memberikan Risk:Reward minimal 2:1.
+
+## LANGKAH 6: Tentukan Setup Phase
+Identifikasi fase setup saat ini:
+- **WAITING_FOR_SWEEP:** Harga belum masuk ke POI atau belum menyapu likuiditas
+- **WAITING_FOR_CLOSE:** Sudah terjadi sweep, menunggu konfirmasi close (displacement)
+- **READY_TO_ENTER:** Semua kondisi terpenuhi, siap masuk posisi
 
 **OUTPUT QUALITY:**
-- Be specific with numbers and levels
-- Explain WHY, not just WHAT
-- Always consider risk-reward ratio
-- Add warnings for low confidence: If confidence 65-80%, include "⚠️ LOW CONFIDENCE: Higher risk, monitor closely"
-- Default to NO_SIGNAL when uncertain`;
+- Confidence MUST be >70% for BUY/SELL signals
+- Take Profit harus memberikan Risk:Reward minimal 2:1 (akan dihitung oleh sistem)
+- Default to NO_SIGNAL ketika setup tidak lengkap atau probabilitas rendah
+- Jika setupPhase adalah WAITING_FOR_SWEEP atau WAITING_FOR_CLOSE, signal harus NO_SIGNAL
+- Signal BUY/SELL hanya diberikan ketika setupPhase adalah READY_TO_ENTER
+- Tambahkan warning untuk low confidence: Jika confidence 70-80%, include "⚠️ LOW CONFIDENCE: Higher risk, monitor closely"
+- Hanya berikan signal ketika SEMUA kondisi fraktal terpenuhi
+- JANGAN menghitung Risk:Reward ratio secara manual - sistem akan menghitungnya`;
 
-      const userPrompt = `Analyze this market data:\n${this.buildMarketContext(marketData, indicators)}
-
-**YOUR TASK:**
-1. Identify the current trend and strength
-2. Check if ALL entry criteria align for BUY/SELL
-3. Calculate precise support/resistance levels
-4. Assess risk factors
-5. Provide actionable signal with detailed reasoning`;
-
-      const output = await this.analyzeWithSchema<StandardSchemaOutput>(
-        StandardAnalysisSchema,
-        systemPrompt,
-        userPrompt,
-      );
-
-      return {
-        signal: {
-          signal: output.signal,
-          confidence: output.confidence,
-          reasoning: output.signalReasoning,
-        },
-        trend: {
-          trend: output.trend,
-          strength: output.trendStrength,
-          description: output.trendDescription,
-        },
-        supportResistance: {
-          supportLevel: output.supportLevel,
-          resistanceLevel: output.resistanceLevel,
-          reasoning: output.levelReasoning,
-        },
-        riskConsiderations: output.riskConsiderations,
-        marketSummary: output.marketSummary,
-      };
-    } catch (error) {
-      console.error("❌ Standard AI analysis error:", error);
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      return this.createFallbackResult(marketData, errorMsg);
-    }
-  }
-
-  // ==================== ICT ANALYSIS ====================
-  async analyzeICTMarket(
-    marketData: MarketData,
-    indicators: TechnicalIndicators,
-    ictAnalysis: ICTAnalysis,
-  ): Promise<ICTAnalysisResult> {
-    try {
-      const marketCtx = this.buildMarketContext(marketData, indicators);
-      const ictCtx = this.buildICTContext(ictAnalysis);
-
-      const systemPrompt = `You are a MASTER ICT (Inner Circle Trader) Specialist following Michael Huddleston's methodology.
-
-**ICT CORE PRINCIPLES (80% weight):**
-
-1. **MARKET STRUCTURE ANALYSIS**
-   - Bullish: Series of Higher Highs (HH) + Higher Lows (HL)
-   - Bearish: Series of Lower Highs (LH) + Lower Lows (LL)
-   - Only trade WITH structure, never against it
-
-2. **ORDER BLOCKS (Primary Setup)**
-   ✅ BULLISH Entry:
-      - Price returns to BULLISH Order Block (last down candle before rally)
-      - OB must be ACTIVE (not violated)
-      - Confluence: Near FVG or liquidity sweep
-      - Entry: OB retest with rejection wick
-
-   ✅ BEARISH Entry:
-      - Price returns to BEARISH Order Block (last up candle before drop)
-      - OB must be ACTIVE (not violated)
-      - Confluence: Near FVG or liquidity sweep
-      - Entry: OB retest with rejection wick
-
-3. **FAIR VALUE GAPS (FVG) - Premium Setups**
-   - FVG = Imbalance/gap in 3-candle sequence
-   - BULLISH: Enter when price fills bearish FVG (buy the discount)
-   - BEARISH: Enter when price fills bullish FVG (sell the premium)
-   - Only trade UNFILLED gaps - ignore filled ones
-
-4. **LIQUIDITY CONCEPTS**
-   - Smart Money HUNTS liquidity before reversal
-   - Bullish Setup: Look for sell-side liquidity sweep (stop hunt below lows) → then buy
-   - Bearish Setup: Look for buy-side liquidity sweep (stop hunt above highs) → then sell
-   - Recent sweeps are CRITICAL confirmation
-
-5. **KILL ZONES (Timing)**
-   🟢 LONDON: 2-5 AM EST (High probability setups)
-   🟢 NEW YORK: 8-11 AM EST (Highest volume, best entries)
-   🔴 AVOID: Asian session unless VERY strong setup
-   - If NOT in kill zone → Reduce confidence by 20-30%
-
-6. **CONFLUENCE SCORING (Must have 3+ for signal)**
-   - Order Block retest (Primary)
-   - FVG fill (Primary)
-   - Liquidity sweep (High value)
-   - Market structure alignment
-   - Kill zone active
-   - Traditional indicators support
-
-**TRADITIONAL INDICATORS (20% weight - Confirmation only):**
-- RSI: Just for overbought/oversold context
-- EMA: Trend filter only
-- MACD: Secondary confirmation
-
-**ENTRY REQUIREMENTS:**
- ✅ BUY Signal:
-    1. Market structure: BULLISH (HH + HL pattern)
-    2. One of: Bullish OB retest OR Bearish FVG fill
-    3. Liquidity: Recent sell-side sweep preferred
-    4. Confluence score: BULLISH > 3
-    5. Kill zone: Active (or very strong setup if not)
-    6. Confidence: >60%
-
- ✅ SELL Signal:
-    1. Market structure: BEARISH (LH + LL pattern)
-    2. One of: Bearish OB retest OR Bullish FVG fill
-    3. Liquidity: Recent buy-side sweep preferred
-    4. Confluence score: BEARISH > 3
-    5. Kill zone: Active (or very strong setup if not)
-    6. Confidence: >60%
-
- 🚫 NO_SIGNAL when:
-    - Market structure unclear/choppy
-    - No valid OB or FVG setup
-    - Outside kill zones with weak confluence
-    - Conflicting ICT signals
-    - Confidence <60%
-
-**INVALIDATIONS (Setup is VOID if):**
-- Order Block violated (price closes through it)
-- FVG already filled completely
-- Market structure breaks (trend reversal)
-- Stop loss level breached
-
-**OUTPUT REQUIREMENTS:**
-- Specify exact ICT concepts triggering signal
-- Name the primary setup (e.g., "Bearish Breaker + FVG Confluence")
-- List 3+ confirmations
-- Define clear invalidation levels
-- For signals: Identify trading method(s) - e.g., 'OB Retest + Reversal', 'FVG Fill + Momentum', 'Liquidity Sweep + Continuation', 'Market Structure Break + Breakout', etc.
-- For NO_SIGNAL: Predict direction (LONG/SHORT/NEUTRAL), confidence %, and method(s) - e.g., 'Continuation + Pullback', 'Reversal + Breakout'
-- Provide timeframe analysis: Explain which timeframes are optimal for monitoring (e.g., "Monitor 4h for trend, 1h for entries, 15m for timing")
-- Add warnings for low confidence signals: If confidence 60-75%, include "⚠️ LOW CONFIDENCE SIGNAL: Monitor closely, increased risk of invalidation"
-- If confidence 75-85%, include "⚡ MODERATE CONFIDENCE: Good setup but confirm with additional factors"
-- Ensure support/resistance levels provide favorable risk-reward ratio (minimum 1:2)
-- Always consider risk-reward ratio before recommending signal`;
-
-      const userPrompt = `Perform deep ICT analysis on this market:\n${marketCtx}\n\n${ictCtx}
+      const userPrompt = `Analyze this fractal market data:\n${this.buildFractalContext(marketData, fractalData)}
 
 **YOUR ANALYSIS STEPS:**
-1. Determine market structure (HH/HL or LH/LL)
-2. Identify active Order Blocks and unfilled FVGs
-3. Check for recent liquidity sweeps
-4. Assess kill zone timing
-5. Calculate confluence score (bullish vs bearish)
-6. Validate ALL entry requirements
-7. Define setup invalidations
-8. Identify trading method(s) for any signal found
-9. For NO_SIGNAL: Predict waiting direction with confidence and method(s)
-10. Provide timeframe analysis and recommendations
-11. Provide actionable signal with ICT-specific reasoning`;
+1. Determine Daily Bias type and interpret implications
+2. Identify nearest Point of Interest (POI) and its strength
+3. Validate structure and timeframe alignment
+4. Confirm Continuation Order Block setup if exists
+5. Determine setup phase (WAITING_FOR_SWEEP, WAITING_FOR_CLOSE, or READY_TO_ENTER)
+6. If valid setup and READY_TO_ENTER, provide precise entry zone, stop loss, and take profit (ensure TP gives >= 2:1 RR)
+7. Give actionable recommendation with confidence score`;
 
-      const output = await this.analyzeWithSchema<ICTSchemaOutput>(
-        ICTAnalysisSchema,
-        systemPrompt,
-        userPrompt,
-      );
-
-      return {
-        signal: {
-          signal: output.signal,
-          confidence: output.confidence,
-          reasoning: output.reasoning,
-        },
-        trend: {
-          trend: output.trend,
-          strength: output.trendStrength,
-          description: output.trendDescription,
-        },
-        supportResistance: {
-          supportLevel: output.supportLevel,
-          resistanceLevel: output.resistanceLevel,
-          reasoning: output.levelReasoning,
-        },
-        riskConsiderations: output.riskConsiderations,
-        marketSummary: output.marketSummary,
-        ictSpecific: output.ictSpecific,
-        setup: output.setup,
-        signalMethod: output.signalMethod,
-        predictedDirection: output.predictedDirection,
-        predictedConfidence: output.predictedConfidence,
-        predictedMethod: output.predictedMethod,
-        timeframeAnalysis: output.timeframeAnalysis,
-      };
-    } catch (error) {
-      console.error("❌ ICT AI analysis error:", error);
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      const fallback = this.createFallbackResult(marketData, errorMsg);
-
-      return {
-        ...fallback,
-        ictSpecific: "Analysis failed",
-        setup: {
-          primary: "Error",
-          confirmations: [],
-          invalidations: ["System error occurred"],
-        },
-      };
-    }
-  }
-
-  // ==================== FIGHTER ANALYSIS ====================
-  async analyzeFighterMarket(
-    marketData: MarketData,
-    indicators: TechnicalIndicators,
-  ): Promise<FighterAnalysisResult> {
-    try {
-      const systemPrompt = `You are an elite Scalping Specialist with 10+ years experience in crypto futures. Your analysis is designed for QUICK, HIGH-FREQUENCY trades with FAST entries and exits.
-
-**SCALPING DECISION FRAMEWORK:**
-1. **MOMENTUM FIRST** - Capture short-term price swings, not long-term trends
-   - Bullish: Recent candles showing upward momentum + RSI trending up
-   - Bearish: Recent candles showing downward momentum + RSI trending down
-   - Neutral: Sideways/choppy with no clear momentum
-
-2. **ENTRY CRITERIA** (MOST must align for BUY/SELL - more flexible than standard):
-    ✅ BUY Requirements:
-       - Momentum: Bullish or at least not bearish
-       - RSI: 20-80 (tolerate overbought for quick scalps)
-       - MACD: Positive histogram OR bullish crossover (not both required)
-       - Price: Near support OR showing bounce pattern
-       - Recent candles: At least 2 of last 3 candles bullish
-       - Confidence: Must be >50% (lower threshold for scalping)
-
-    ✅ SELL Requirements:
-       - Momentum: Bearish or at least not bullish
-       - RSI: 20-80 (tolerate oversold for quick scalps)
-       - MACD: Negative histogram OR bearish crossover (not both required)
-       - Price: Near resistance OR showing rejection pattern
-       - Recent candles: At least 2 of last 3 candles bearish
-       - Confidence: Must be >50%
-
- 3. **NO_SIGNAL Triggers** (Less conservative):
-    - RSI in extreme zones (<20 or >80) BUT only if momentum strongly opposes
-    - Very choppy price action with conflicting momentum
-    - Confidence <50%
-    - No momentum in recent candles
-
-**SCALPING SUPPORT/RESISTANCE RULES:**
-- Support: Recent swing lows, EMA9/21, minor psychological levels
-- Resistance: Recent swing highs, previous minor breakouts
-- Must be within 2% of current price (tighter for scalps)
-- Target quick 0.5-1% moves, not major S/R breaks
-
-**OUTPUT QUALITY FOR SCALPING:**
-- Focus on IMMEDIATE momentum, not long-term analysis
-- Target 1:1 to 1:2 risk-reward (quick profits, tight stops)
-- Emphasize entry timing and exit signals
-- Add scalping warnings: "⚡ HIGH FREQUENCY: Monitor closely, exit quickly on momentum shift"
-- If confidence 50-65%, include "⚠️ SCALP RISK: Higher frequency needed, tight stops essential"
-- Default to NO_SIGNAL only when truly no momentum`;
-
-      const userPrompt = `Analyze this market data for scalping opportunities:\n${this.buildMarketContext(marketData, indicators)}
-
-**YOUR TASK:**
-1. Identify current momentum direction and strength
-2. Check if MOST entry criteria align for BUY/SELL (not all required)
-3. Calculate tight support/resistance levels for quick scalps
-4. Assess scalping-specific risk factors
-5. Provide actionable signal with scalping reasoning
-6. Recommend optimal timeframe for this scalp (e.g., "1m-5m for quick entries")`;
-
-      const output = await this.analyzeWithSchema<FighterSchemaOutput>(
-        FighterAnalysisSchema,
+      const output = await this.analyzeWithSchema<FractalSchemaOutput>(
+        FractalAnalysisSchema,
         systemPrompt,
         userPrompt,
       );
@@ -590,50 +280,40 @@ export class AIAnalyzerService {
           confidence: output.confidence,
           reasoning: output.signalReasoning,
         },
-        trend: {
-          trend: output.trend,
-          strength: output.trendStrength,
-          description: output.trendDescription,
-        },
-        supportResistance: {
-          supportLevel: output.supportLevel,
-          resistanceLevel: output.resistanceLevel,
-          reasoning: output.levelReasoning,
-        },
+        biasAnalysis: output.biasAnalysis,
+        poiIdentified: output.poiIdentified,
+        structureValidation: output.structureValidation,
+        setupConfirmation: output.setupConfirmation,
+        setupPhase: output.setupPhase,
+        entryZone: output.entryZone,
+        stopLoss: output.stopLoss,
+        takeProfit: output.takeProfit,
         riskConsiderations: output.riskConsiderations,
         marketSummary: output.marketSummary,
-        scalpingTimeframe: output.scalpingTimeframe,
       };
     } catch (error) {
-      console.error("❌ Fighter AI analysis error:", error);
+      console.error("❌ Fractal AI analysis error:", error);
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      const fallback = this.createFallbackResult(marketData, errorMsg);
-
       return {
-        ...fallback,
-        scalpingTimeframe: "Analysis failed",
+        signal: {
+          signal: "NO_SIGNAL",
+          confidence: 0,
+          reasoning: `Analysis failed: ${errorMsg}`,
+        },
+        biasAnalysis: "Analysis error",
+        poiIdentified: "None",
+        structureValidation: "Failed to validate",
+        setupConfirmation: "Setup analysis failed",
+        setupPhase: "WAITING_FOR_SWEEP",
+        entryZone: 0,
+        stopLoss: 0,
+        takeProfit: 0,
+        riskConsiderations: "⚠️ System error - avoid trading until resolved",
+        marketSummary: `Analysis Error: ${errorMsg}`,
       };
     }
   }
 
-  // ==================== PARALLEL ANALYSIS ====================
-  async analyzeMarketBoth(
-    marketData: MarketData,
-    indicators: TechnicalIndicators,
-    ictAnalysis: ICTAnalysis,
-  ): Promise<{
-    standard: AnalysisResult;
-    ict: ICTAnalysisResult;
-  }> {
-    const [standard, ict] = await Promise.all([
-      this.analyzeMarket(marketData, indicators),
-      this.analyzeICTMarket(marketData, indicators, ictAnalysis),
-    ]);
-
-    return { standard, ict };
-  }
-
-  // ==================== LLM TEST ====================
   async testLLM(prompt: string): Promise<string> {
     try {
       const { text } = await generateText({
