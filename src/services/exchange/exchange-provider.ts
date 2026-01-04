@@ -18,13 +18,15 @@ export class ExchangeProvider {
     const provider = CONFIG.exchange.provider.toLowerCase();
 
     switch (provider) {
-      case 'bybit':
+      case "bybit":
         return new BybitExchange();
-      case 'hyperliquid':
+      case "hyperliquid":
         return new HyperliquidExchange();
 
       default:
-        console.warn(`Exchange provider "${provider}" not found, using Bybit as default`);
+        console.warn(
+          `Exchange provider "${provider}" not found, using Bybit as default`,
+        );
         return new BybitExchange();
     }
   }

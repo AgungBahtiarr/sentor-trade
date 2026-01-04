@@ -1,6 +1,6 @@
 export const CONFIG = {
   exchange: {
-    provider: "hyperliquid",
+    provider: "bybit",
     defaultSymbol: "BTCUSDT",
     defaultTimeframe: "15m",
     candleLimit: 100,
