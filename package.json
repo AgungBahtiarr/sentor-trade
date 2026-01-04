@@ -5,8 +5,8 @@
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^1.5.4",
-    "ai": "^6.0.3",
-    "ccxt": "^4.5.29",
+    "ai": "^6.0.6",
+    "ccxt": "^4.5.30",
     "hono": "^4.11.3",
     "technicalindicators": "^3.1.0"
   },
