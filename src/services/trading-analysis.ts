@@ -134,12 +134,29 @@ export class TradingAnalysisService {
       fractalData,
     );
 
-    if (aiAnalysis.setupPhase !== "READY_TO_ENTER") {
+    if (!CONFIG.ai.allowNonReadyPhases && aiAnalysis.setupPhase !== "READY_TO_ENTER") {
       logger.debug(
         `Setup phase is ${aiAnalysis.setupPhase}, forcing NO_SIGNAL`,
       );
       aiAnalysis.signal.signal = "NO_SIGNAL";
       aiAnalysis.signal.reasoning += ` Setup phase is ${aiAnalysis.setupPhase}, waiting for READY_TO_ENTER.`;
+    } else if (CONFIG.ai.allowNonReadyPhases && aiAnalysis.setupPhase === "WAITING_FOR_SWEEP") {
+      logger.debug(
+        `Setup phase is ${aiAnalysis.setupPhase}, forcing NO_SIGNAL`,
+      );
+      aiAnalysis.signal.signal = "NO_SIGNAL";
+      aiAnalysis.signal.reasoning += ` Setup phase is WAITING_FOR_SWEEP, too early to enter. Waiting for displacement.`;
+    } else if (CONFIG.ai.allowNonReadyPhases && aiAnalysis.setupPhase === "INVALID") {
+      logger.debug(
+        `Setup phase is ${aiAnalysis.setupPhase}, forcing NO_SIGNAL`,
+      );
+      aiAnalysis.signal.signal = "NO_SIGNAL";
+      aiAnalysis.signal.reasoning += ` Setup phase is INVALID, structure violated. No entry.`;
+    } else if (CONFIG.ai.allowNonReadyPhases && aiAnalysis.setupPhase === "WAITING_FOR_CLOSE") {
+      logger.info(
+        `Setup phase is ${aiAnalysis.setupPhase}, allowing signal with elevated risk`,
+      );
+      aiAnalysis.signal.reasoning += ` Setup is WAITING_FOR_CLOSE (displacement in progress). Signal allowed but requires confirmation.`;
     }
 
     const nearestSupport = findNearestSupport(
