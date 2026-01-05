@@ -1,6 +1,6 @@
 export const CONFIG = {
   exchange: {
-    provider: "bybit",
+    provider: "okx",
     defaultSymbol: "BTCUSDT",
     defaultTimeframe: "15m",
     candleLimit: 100,

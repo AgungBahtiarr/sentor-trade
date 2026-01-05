@@ -1,5 +1,6 @@
 import { BybitExchange } from "./bybit";
 import { HyperliquidExchange } from "./hyperliquid";
+import { OkxExchange } from "./okx";
 import type { IExchange } from "./exchange-interface";
 import { CONFIG } from "../../lib/config";
 
@@ -22,6 +23,8 @@ export class ExchangeProvider {
         return new BybitExchange();
       case "hyperliquid":
         return new HyperliquidExchange();
+      case "okx":
+        return new OkxExchange();
 
       default:
         console.warn(
